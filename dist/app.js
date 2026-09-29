@@ -106,6 +106,7 @@
   let cloudLoading = false;
   let cloudSaveTimer = null;
   let activeCloudUser = null;
+  let recoveryMode = false;
 
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -1009,8 +1010,13 @@
   }
 
   function showAuthScreen(message = "Ingresá para continuar.", type = "") {
+    recoveryMode = false;
     cloudReady = false;
     activeCloudUser = null;
+    $("#auth-title").textContent = "Inventario protegido";
+    $("#auth-intro").textContent = "Ingresá con tu correo para ver y actualizar la información desde cualquier computadora.";
+    $("#auth-form").hidden = false;
+    $("#recovery-form").hidden = true;
     document.body.classList.remove("cloud-loading", "cloud-ready");
     document.body.classList.add("auth-required");
     setAuthMessage(message, type);
@@ -1019,6 +1025,19 @@
   function showCloudApp() {
     document.body.classList.remove("cloud-loading", "auth-required");
     document.body.classList.add("cloud-ready");
+  }
+
+  function showRecoveryScreen(session) {
+    recoveryMode = true;
+    cloudReady = false;
+    activeCloudUser = session?.user || null;
+    $("#auth-title").textContent = "Elegí una contraseña nueva";
+    $("#auth-intro").textContent = "Escribila dos veces para confirmar el cambio.";
+    $("#auth-form").hidden = true;
+    $("#recovery-form").hidden = false;
+    document.body.classList.remove("cloud-loading", "cloud-ready");
+    document.body.classList.add("auth-required");
+    setAuthMessage("El enlace de recuperación fue validado.", "success");
   }
 
   async function loadCloudState() {
@@ -1047,6 +1066,7 @@
 
   async function openCloudSession(session) {
     if (!session?.user) return showAuthScreen();
+    if (recoveryMode) return;
     if (cloudReady && activeCloudUser?.id === session.user.id) return;
     activeCloudUser = session.user;
     setAuthMessage("Abriendo tu inventario…");
@@ -1065,17 +1085,20 @@
       showAuthScreen("No se pudo iniciar la conexión segura. Revisá la conexión a Internet.", "error");
       return;
     }
-    const { data: { session }, error } = await cloudClient.auth.getSession();
-    if (error) showAuthScreen("No se pudo comprobar la sesión. Intentá nuevamente.", "error");
-    else if (session) await openCloudSession(session);
-    else showAuthScreen();
-
     cloudClient.auth.onAuthStateChange((event, nextSession) => {
       setTimeout(() => {
-        if (event === "SIGNED_OUT") showAuthScreen("Sesión cerrada.");
+        if (event === "PASSWORD_RECOVERY" && nextSession) showRecoveryScreen(nextSession);
+        else if (event === "SIGNED_OUT") showAuthScreen("Sesión cerrada.");
         else if (event === "SIGNED_IN" && nextSession) openCloudSession(nextSession);
       }, 0);
     });
+
+    const { data: { session }, error } = await cloudClient.auth.getSession();
+    const recoveryLink = location.hash.includes("type=recovery") || location.search.includes("type=recovery");
+    if (error) showAuthScreen("No se pudo comprobar la sesión. Intentá nuevamente.", "error");
+    else if (session && recoveryLink) showRecoveryScreen(session);
+    else if (session) await openCloudSession(session);
+    else showAuthScreen();
   }
 
   $("#auth-form").addEventListener("submit", async (event) => {
@@ -1098,6 +1121,30 @@
     if (error) return setAuthMessage(error.message.includes("already") ? "Este correo ya tiene acceso. Usá el botón Ingresar." : "No se pudo crear el acceso. Intentá nuevamente.", "error");
     if (data.session) await openCloudSession(data.session);
     else setAuthMessage("Revisá tu correo y confirmá el enlace. Después volvé e ingresá.", "success");
+  });
+
+  $("#forgot-password-button").addEventListener("click", async () => {
+    const email = $("#auth-email").value.trim().toLowerCase();
+    if (email !== "teresaferres@gmail.com") return setAuthMessage("El acceso está reservado para teresaferres@gmail.com.", "error");
+    setAuthMessage("Enviando el enlace de recuperación…");
+    const redirectTo = `${location.origin}${location.pathname}`;
+    const { error } = await cloudClient.auth.resetPasswordForEmail(email, { redirectTo });
+    if (error) return setAuthMessage("No se pudo enviar el enlace. Intentá nuevamente en unos minutos.", "error");
+    setAuthMessage("Te enviamos un correo. Abrí el enlace para elegir tu nueva contraseña.", "success");
+  });
+
+  $("#recovery-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const password = $("#recovery-password").value;
+    const confirmation = $("#recovery-password-confirm").value;
+    if (password.length < 6) return setAuthMessage("La contraseña debe tener al menos 6 caracteres.", "error");
+    if (password !== confirmation) return setAuthMessage("Las contraseñas no coinciden.", "error");
+    setAuthMessage("Guardando la contraseña nueva…");
+    const { error } = await cloudClient.auth.updateUser({ password });
+    if (error) return setAuthMessage("No se pudo actualizar. Pedí un enlace nuevo e intentá otra vez.", "error");
+    history.replaceState({}, document.title, location.pathname);
+    await cloudClient.auth.signOut();
+    showAuthScreen("Contraseña actualizada. Ya podés ingresar.", "success");
   });
 
   $("#logout-button").addEventListener("click", async () => {

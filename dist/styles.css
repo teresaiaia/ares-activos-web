@@ -28,6 +28,7 @@ body { margin: 0; min-width: 320px; background: #eef1f6; color: var(--ink); font
 .auth-form label { display: grid; gap: 6px; color: var(--ink); font-size: .82rem; font-weight: 750; }
 .auth-form input { width: 100%; padding: 11px 12px; border: 1px solid #ced5e0; border-radius: 9px; background: #fff; color: var(--ink); outline: none; }
 .auth-form input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(36,89,211,.12); }
+.auth-link { justify-self: center; padding: 5px 8px; border: 0; background: transparent; color: var(--blue); font-size: .8rem; font-weight: 750; text-decoration: underline; text-underline-offset: 3px; }
 .auth-message { min-height: 22px; margin: 16px 0 0; color: var(--muted); font-size: .8rem; }
 .auth-message.error { color: var(--danger); }
 .auth-message.success { color: #187453; }
