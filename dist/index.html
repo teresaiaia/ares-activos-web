@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#12213f" />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%2312213f'/%3E%3Cpath d='M17 46 29 17h7l12 29h-8l-2-6H26l-2 6Zm12-13h6l-3-9Z' fill='%236fe0c1'/%3E%3C/svg%3E" />
     <title>Gestión de activos · ARES Activos</title>
-    <link rel="stylesheet" href="styles.css?v=13" />
+    <link rel="stylesheet" href="styles.css?v=14" />
   </head>
   <body class="cloud-loading">
     <section id="auth-screen" class="auth-screen" aria-labelledby="auth-title">
@@ -41,6 +41,9 @@
           </button>
           <button class="nav-item stock-nav" type="button" data-view="stock">
             <span class="nav-icon">▧</span> Stock General
+          </button>
+          <button class="nav-item stock-grouped-nav" type="button" data-view="stock-grouped">
+            <span class="nav-icon">▦</span> Stock consolidado
           </button>
           <button class="nav-item installed-nav" type="button" data-view="installed">
             <span class="nav-icon">⌁</span> Base instalada
@@ -247,6 +250,95 @@
             <div class="panel-footer">
               <span id="stock-table-count">0 productos</span>
               <span id="stock-last-update">Sin cambios todavía</span>
+            </div>
+          </section>
+        </section>
+
+        <section id="stock-grouped-view" class="view stock-view-theme">
+          <div class="summary-grid" aria-label="Resumen del stock consolidado">
+            <article class="summary-card total-card stock-total-card">
+              <div class="summary-label"><span class="summary-icon">$</span> Costo estimado para seguro</div>
+              <strong id="grouped-stock-summary-value">US$ 0,00</strong>
+              <p id="grouped-stock-summary-valuation">Mismo total que el stock detallado</p>
+            </article>
+            <article class="summary-card">
+              <div class="summary-label"><span class="summary-icon stock-neutral">▦</span> Productos agrupados</div>
+              <strong id="grouped-stock-summary-products">0</strong>
+              <p id="grouped-stock-summary-lines">0 rubros</p>
+            </article>
+            <article class="summary-card">
+              <div class="summary-label"><span class="summary-icon stock-alert">#</span> Unidades</div>
+              <strong id="grouped-stock-summary-units">0</strong>
+              <p id="grouped-stock-summary-boxes">0 cajas</p>
+            </article>
+            <article class="summary-card">
+              <div class="summary-label"><span class="summary-icon stock-soft">?</span> Sin precio</div>
+              <strong id="grouped-stock-summary-unpriced">0</strong>
+              <p>Productos a valorizar</p>
+            </article>
+          </div>
+
+          <section class="stock-valuation-intro grouped-stock-intro" aria-labelledby="grouped-stock-title">
+            <div>
+              <p class="eyebrow">RESUMEN POR PRODUCTO</p>
+              <h2 id="grouped-stock-title">Stock por cantidad, sin números de serie</h2>
+              <p>Esta vista agrupa los registros con el mismo producto, suma cajas y unidades, y conserva exactamente el valor calculado en el Stock General. La planilla detallada por serie no se modifica.</p>
+            </div>
+            <div class="grouped-stock-note">
+              <strong>Vista automática</strong>
+              <small>Los cambios se realizan en Stock General y aparecen aquí agrupados.</small>
+            </div>
+          </section>
+
+          <section class="panel stock-panel">
+            <div class="panel-heading">
+              <div>
+                <h2>Existencias consolidadas</h2>
+                <p>Una sola fila por producto, con cantidad y valorización total para el seguro.</p>
+              </div>
+              <div class="table-actions">
+                <label class="search">
+                  <span aria-hidden="true">⌕</span>
+                  <input id="grouped-stock-search-input" type="search" placeholder="Buscar producto, marca o modelo" />
+                </label>
+                <select id="grouped-stock-category-filter" aria-label="Filtrar stock consolidado por rubro">
+                  <option value="">Todos los rubros</option>
+                </select>
+                <button class="icon-button" type="button" id="grouped-stock-export-csv" title="Exportar stock consolidado en CSV" aria-label="Exportar stock consolidado en CSV">⇩</button>
+              </div>
+            </div>
+
+            <div class="table-wrap grouped-stock-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th class="sortable-th"><button class="sort-button" type="button" data-grouped-stock-sort-key="name" data-sort-label="producto">Producto <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th class="sortable-th"><button class="sort-button" type="button" data-grouped-stock-sort-key="category" data-sort-label="rubro">Rubro <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th class="sortable-th"><button class="sort-button" type="button" data-grouped-stock-sort-key="brand" data-sort-label="marca">Marca / modelo <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th class="numeric sortable-th"><button class="sort-button" type="button" data-grouped-stock-sort-key="boxes" data-sort-label="cajas">Cajas <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th class="numeric sortable-th"><button class="sort-button" type="button" data-grouped-stock-sort-key="quantity" data-sort-label="unidades">Unidades <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th class="numeric sortable-th"><button class="sort-button" type="button" data-grouped-stock-sort-key="listPriceUsd" data-sort-label="precio de lista">Precio lista US$<small>IVA incluido</small> <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th class="numeric sortable-th"><button class="sort-button" type="button" data-grouped-stock-sort-key="netPriceUsd" data-sort-label="precio neto">Precio neto US$ <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th class="numeric sortable-th"><button class="sort-button" type="button" data-grouped-stock-sort-key="marginPercent" data-sort-label="ganancia">Ganancia % <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th class="numeric sortable-th"><button class="sort-button" type="button" data-grouped-stock-sort-key="estimatedUnitCostUsd" data-sort-label="costo unitario estimado">Costo unit. US$ <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th class="numeric sortable-th"><button class="sort-button" type="button" data-grouped-stock-sort-key="estimatedTotalCostUsd" data-sort-label="costo total estimado">Costo total US$ <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                  </tr>
+                </thead>
+                <tbody id="grouped-stock-body"></tbody>
+              </table>
+              <div id="grouped-stock-empty-state" class="empty-state">
+                <div class="empty-illustration stock-empty-illustration" aria-hidden="true">▦</div>
+                <h3>No hay existencias para consolidar</h3>
+                <p>Los productos con unidades o cajas aparecerán automáticamente desde Stock General.</p>
+              </div>
+              <div id="grouped-stock-no-results" class="empty-state compact" hidden>
+                <h3>No hay coincidencias</h3>
+                <p>Probá con otra búsqueda o quitá el filtro.</p>
+              </div>
+            </div>
+            <div class="panel-footer">
+              <span id="grouped-stock-table-count">0 productos agrupados</span>
+              <span id="grouped-stock-last-update">Sin cambios todavía</span>
             </div>
           </section>
         </section>
@@ -572,6 +664,6 @@
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.102.0/dist/umd/supabase.min.js"></script>
     <script src="cloud-config.js?v=1"></script>
-    <script src="app.js?v=13"></script>
+    <script src="app.js?v=14"></script>
   </body>
 </html>

@@ -169,6 +169,13 @@ tbody tr:hover { background: #fafbfe; }
 .stock-row.a-prestamo td, .stock-row.no-disponible td { background: #fafafa; }
 .stock-row.no-disponible td { color: #777b80; }
 .stock-table-wrap table { min-width: 1910px; }
+.grouped-stock-table-wrap table { min-width: 1460px; }
+.grouped-stock-note { padding-left: 22px; border-left: 1px solid #d8dbde; }
+.grouped-stock-note strong, .grouped-stock-note small, .grouped-model { display: block; }
+.grouped-stock-note strong { color: #3f444a; font-size: .82rem; text-transform: uppercase; letter-spacing: .04em; }
+.grouped-stock-note small { max-width: 250px; margin-top: 5px; color: #7d8288; font-size: .73rem; line-height: 1.4; }
+.grouped-model { margin-top: 3px; color: #8a8e93; font-size: .7rem; }
+.grouped-stock-row .item-cell { min-width: 245px; }
 .price-basis { display: block; margin-top: 3px; color: #8a8e93; font-size: .66rem; font-weight: 600; white-space: nowrap; }
 .margin-badge { display: inline-flex; min-width: 48px; justify-content: center; padding: 4px 8px; border-radius: 999px; background: #eceeef; color: #484d53; font-size: .72rem; font-weight: 800; }
 .stock-view-theme .stock-empty-illustration { background: #e4e6e8; color: #50555b; }
@@ -309,7 +316,7 @@ tbody tr:hover { background: #fafbfe; }
 @media (max-width: 1100px) {
   .summary-grid { grid-template-columns: 1fr 1fr; }
   .stock-valuation-intro { grid-template-columns: 1fr; gap: 16px; }
-  .default-margin-control { padding: 14px 0 0; border-top: 1px solid #d8dbde; border-left: 0; }
+  .default-margin-control, .grouped-stock-note { padding: 14px 0 0; border-top: 1px solid #d8dbde; border-left: 0; }
   .panel-heading { align-items: flex-start; flex-direction: column; }
   .table-actions { width: 100%; flex-wrap: wrap; }
   .search { flex: 1 1 240px; }
@@ -354,7 +361,7 @@ tbody tr:hover { background: #fafbfe; }
 @media print {
   @page { size: A4 landscape; margin: 12mm; }
   body { background: #fff; }
-  .sidebar, .topbar, #inventory-view, #stock-view, #installed-view, .no-print, .toast { display: none !important; }
+  .sidebar, .topbar, #inventory-view, #stock-view, #stock-grouped-view, #installed-view, .no-print, .toast { display: none !important; }
   .app-shell, main, #report-view { display: block !important; }
   main { padding: 0; }
   .report-sheet { max-width: none; margin: 0; padding: 0; border: 0; box-shadow: none; }
