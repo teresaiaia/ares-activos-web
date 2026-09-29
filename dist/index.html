@@ -1,0 +1,578 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Inventario, stock general y base instalada de equipos de ARES." />
+    <meta name="theme-color" content="#12213f" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%2312213f'/%3E%3Cpath d='M17 46 29 17h7l12 29h-8l-2-6H26l-2 6Zm12-13h6l-3-9Z' fill='%236fe0c1'/%3E%3C/svg%3E" />
+    <title>Gestión de activos · ARES Activos</title>
+    <link rel="stylesheet" href="styles.css?v=10" />
+  </head>
+  <body class="cloud-loading">
+    <section id="auth-screen" class="auth-screen" aria-labelledby="auth-title">
+      <div class="auth-card">
+        <div class="auth-brand" aria-hidden="true">A</div>
+        <p class="eyebrow">ARES ACTIVOS · ACCESO PRIVADO</p>
+        <h1 id="auth-title">Inventario protegido</h1>
+        <p>Ingresá con tu correo para ver y actualizar la información desde cualquier computadora.</p>
+        <form id="auth-form" class="auth-form">
+          <label>Correo electrónico<input id="auth-email" type="email" autocomplete="email" required value="teresaferres@gmail.com" /></label>
+          <label>Contraseña<input id="auth-password" type="password" autocomplete="current-password" minlength="6" required /></label>
+          <button class="button primary" type="submit">Ingresar</button>
+          <button class="button ghost" type="button" id="signup-button">Crear mi acceso</button>
+        </form>
+        <p id="auth-message" class="auth-message" role="status" aria-live="polite">Conectando con la nube…</p>
+      </div>
+    </section>
+
+    <div class="app-shell" id="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">A</span>
+          <div>
+            <strong>ARES Activos</strong>
+            <span>Gestión de activos</span>
+          </div>
+        </div>
+
+        <nav class="nav" aria-label="Navegación principal">
+          <button class="nav-item active" type="button" data-view="inventory">
+            <span class="nav-icon">▦</span> Inventario
+          </button>
+          <button class="nav-item stock-nav" type="button" data-view="stock">
+            <span class="nav-icon">▧</span> Stock General
+          </button>
+          <button class="nav-item installed-nav" type="button" data-view="installed">
+            <span class="nav-icon">⌁</span> Base instalada
+          </button>
+          <button class="nav-item" type="button" data-view="report">
+            <span class="nav-icon">▤</span> Informe del seguro
+          </button>
+        </nav>
+
+        <div class="sidebar-note cloud-note">
+          <span class="privacy-dot" id="sync-dot"></span>
+          <div>
+            <strong id="sync-label">Nube conectada</strong>
+            <p id="sync-detail">Los cambios se guardan automáticamente.</p>
+            <button class="sidebar-logout" type="button" id="logout-button">Cerrar sesión</button>
+          </div>
+        </div>
+      </aside>
+
+      <main>
+        <header class="topbar">
+          <div>
+            <p class="eyebrow" id="page-eyebrow">GESTIÓN PATRIMONIAL</p>
+            <h1 id="page-title">Inventario de oficina</h1>
+          </div>
+          <div class="topbar-actions">
+            <button class="button ghost" type="button" id="backup-button">Respaldo</button>
+            <button class="button primary" type="button" id="add-button"><span>＋</span> <span id="add-button-label">Añadir bien</span></button>
+          </div>
+        </header>
+
+        <section id="inventory-view" class="view active">
+          <div class="summary-grid" aria-label="Resumen del inventario">
+            <article class="summary-card total-card">
+              <div class="summary-label"><span class="summary-icon">₲</span> Valor incluido</div>
+              <strong id="summary-value">₲ 0</strong>
+              <p id="summary-records">0 registros incluidos</p>
+            </article>
+            <article class="summary-card">
+              <div class="summary-label"><span class="summary-icon review">!</span> Valor por revisar</div>
+              <strong id="summary-review-value">₲ 0</strong>
+              <p id="summary-review-records">0 registros pendientes</p>
+            </article>
+            <article class="summary-card">
+              <div class="summary-label"><span class="summary-icon warning">?</span> Datos faltantes</div>
+              <strong id="summary-missing">0</strong>
+              <p>Bienes sin valor o ubicación</p>
+            </article>
+            <article class="summary-card">
+              <div class="summary-label"><span class="summary-icon pale">⌂</span> Ubicaciones</div>
+              <strong id="summary-locations">0</strong>
+              <p id="summary-units">0 unidades registradas</p>
+            </article>
+          </div>
+
+          <section class="panel inventory-panel">
+            <div class="panel-heading">
+              <div>
+                <h2>Bienes registrados</h2>
+                <p>Activos propios de la oficina; no incluye mercadería para la venta.</p>
+              </div>
+              <div class="table-actions">
+                <label class="search">
+                  <span aria-hidden="true">⌕</span>
+                  <input id="search-input" type="search" placeholder="Buscar por bien, marca o serie" />
+                </label>
+                <select id="category-filter" aria-label="Filtrar por categoría">
+                  <option value="">Todas las categorías</option>
+                </select>
+                <select id="decision-filter" aria-label="Filtrar por decisión">
+                  <option value="">Todas las decisiones</option>
+                  <option>Incluir</option><option>Revisar</option><option>Excluir</option>
+                </select>
+                <button class="icon-button" type="button" id="export-csv" title="Exportar CSV" aria-label="Exportar CSV">⇩</button>
+              </div>
+            </div>
+
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th class="sortable-th"><button class="sort-button" type="button" data-sort-key="name" data-sort-label="bien">Bien <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th class="sortable-th"><button class="sort-button" type="button" data-sort-key="category" data-sort-label="categoría">Categoría <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th class="sortable-th"><button class="sort-button" type="button" data-sort-key="location" data-sort-label="ubicación">Ubicación <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th class="numeric sortable-th"><button class="sort-button" type="button" data-sort-key="quantity" data-sort-label="unidades">Cant. <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th class="numeric sortable-th"><button class="sort-button" type="button" data-sort-key="unitCost" data-sort-label="costo unitario">Costo unitario <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th class="numeric sortable-th"><button class="sort-button" type="button" data-sort-key="total" data-sort-label="subtotal">Subtotal <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th class="sortable-th"><button class="sort-button" type="button" data-sort-key="decision" data-sort-label="decisión">Decisión <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th><span class="sr-only">Acciones</span></th>
+                  </tr>
+                </thead>
+                <tbody id="inventory-body"></tbody>
+              </table>
+              <div id="empty-state" class="empty-state">
+                <div class="empty-illustration" aria-hidden="true">▦</div>
+                <h3>Empezá por el primer bien</h3>
+                <p>Registrá muebles, equipos, instalaciones y demás activos de la oficina.</p>
+                <button class="button primary" type="button" id="empty-add-button">Añadir primer bien</button>
+              </div>
+              <div id="no-results" class="empty-state compact" hidden>
+                <h3>No hay coincidencias</h3>
+                <p>Probá con otra búsqueda o quitá el filtro.</p>
+              </div>
+            </div>
+            <div class="panel-footer">
+              <span id="table-count">0 bienes</span>
+              <span id="last-update">Sin cambios todavía</span>
+            </div>
+          </section>
+        </section>
+
+        <section id="stock-view" class="view stock-view-theme">
+          <div class="summary-grid" aria-label="Resumen del stock general">
+            <article class="summary-card total-card stock-total-card">
+              <div class="summary-label"><span class="summary-icon">$</span> Costo estimado para seguro</div>
+              <strong id="stock-summary-value">US$ 0,00</strong>
+              <p id="stock-summary-unpriced">0 registros sin precio de lista</p>
+            </article>
+            <article class="summary-card">
+              <div class="summary-label"><span class="summary-icon stock-neutral">▦</span> Registros</div>
+              <strong id="stock-summary-records">0</strong>
+              <p id="stock-summary-categories">0 líneas de stock</p>
+            </article>
+            <article class="summary-card">
+              <div class="summary-label"><span class="summary-icon stock-alert">✓</span> Disponibles</div>
+              <strong id="stock-summary-available">0</strong>
+              <p id="stock-summary-status-note">0 no disponibles · 0 a préstamo</p>
+            </article>
+            <article class="summary-card">
+              <div class="summary-label"><span class="summary-icon stock-soft">#</span> Unidades</div>
+              <strong id="stock-summary-units">0</strong>
+              <p id="stock-summary-boxes">0 cajas</p>
+            </article>
+          </div>
+
+          <section class="stock-valuation-intro" aria-labelledby="stock-valuation-title">
+            <div>
+              <p class="eyebrow">VALORIZACIÓN PARA EL SEGURO</p>
+              <h2 id="stock-valuation-title">Costo estimado previo a la venta</h2>
+              <p>Partimos del precio de lista en dólares con IVA incluido, calculamos el neto y descontamos la ganancia para estimar el costo del producto antes de venderlo.</p>
+            </div>
+            <label class="default-margin-control">
+              Ganancia predeterminada
+              <span><input id="stock-default-margin" type="number" min="0" max="300" step="1" value="40" /> %</span>
+              <small>Se aplica a los registros nuevos y puede modificarse en cada producto.</small>
+            </label>
+          </section>
+
+          <section class="panel stock-panel">
+            <div class="panel-heading">
+              <div>
+                <h2>Existencias registradas</h2>
+                <p>Equipos, productos y repuestos importados desde STOCK GRAL ARES.xlsb.</p>
+              </div>
+              <div class="table-actions">
+                <label class="search">
+                  <span aria-hidden="true">⌕</span>
+                  <input id="stock-search-input" type="search" placeholder="Buscar producto, marca, modelo o serie" />
+                </label>
+                <select id="stock-category-filter" aria-label="Filtrar stock por categoría">
+                  <option value="">Todas las líneas</option>
+                </select>
+                <select id="stock-status-filter" aria-label="Filtrar stock por estado">
+                  <option value="">Todos los estados</option>
+                  <option>Disponible</option><option>No disponible</option><option>A préstamo</option>
+                </select>
+                <button class="icon-button" type="button" id="stock-export-csv" title="Exportar stock en CSV" aria-label="Exportar stock en CSV">⇩</button>
+              </div>
+            </div>
+
+            <div class="table-wrap stock-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th class="sortable-th"><button class="sort-button" type="button" data-stock-sort-key="name" data-sort-label="producto">Producto <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th class="sortable-th"><button class="sort-button" type="button" data-stock-sort-key="category" data-sort-label="línea">Línea <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th class="sortable-th"><button class="sort-button" type="button" data-stock-sort-key="brand" data-sort-label="marca">Marca <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th class="sortable-th"><button class="sort-button" type="button" data-stock-sort-key="model" data-sort-label="modelo">Modelo <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th class="sortable-th"><button class="sort-button" type="button" data-stock-sort-key="serial" data-sort-label="número de serie">Serie <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th class="numeric sortable-th"><button class="sort-button" type="button" data-stock-sort-key="boxes" data-sort-label="cajas">Cajas <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th class="numeric sortable-th"><button class="sort-button" type="button" data-stock-sort-key="quantity" data-sort-label="unidades">Unidades <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th class="numeric sortable-th"><button class="sort-button" type="button" data-stock-sort-key="listPriceUsd" data-sort-label="precio de lista">Precio lista US$<small>IVA incluido</small> <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th class="numeric sortable-th"><button class="sort-button" type="button" data-stock-sort-key="netPriceUsd" data-sort-label="precio neto">Precio neto US$ <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th class="numeric sortable-th"><button class="sort-button" type="button" data-stock-sort-key="marginPercent" data-sort-label="ganancia">Ganancia % <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th class="numeric sortable-th"><button class="sort-button" type="button" data-stock-sort-key="estimatedUnitCostUsd" data-sort-label="costo unitario estimado">Costo unit. US$ <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th class="numeric sortable-th"><button class="sort-button" type="button" data-stock-sort-key="estimatedTotalCostUsd" data-sort-label="costo total estimado">Costo total US$ <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th class="sortable-th"><button class="sort-button" type="button" data-stock-sort-key="status" data-sort-label="estado">Estado <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th><span class="sr-only">Acciones</span></th>
+                  </tr>
+                </thead>
+                <tbody id="stock-body"></tbody>
+              </table>
+              <div id="stock-empty-state" class="empty-state">
+                <div class="empty-illustration stock-empty-illustration" aria-hidden="true">▧</div>
+                <h3>Empezá por el primer producto</h3>
+                <p>Registrá equipos, productos y repuestos del stock general.</p>
+                <button class="button primary" type="button" id="stock-empty-add-button">Añadir primer producto</button>
+              </div>
+              <div id="stock-no-results" class="empty-state compact" hidden>
+                <h3>No hay coincidencias</h3>
+                <p>Probá con otra búsqueda o quitá el filtro.</p>
+              </div>
+            </div>
+            <div class="panel-footer">
+              <span id="stock-table-count">0 productos</span>
+              <span id="stock-last-update">Sin cambios todavía</span>
+            </div>
+          </section>
+        </section>
+
+        <section id="installed-view" class="view installed-view-theme">
+          <div class="summary-grid" aria-label="Resumen de la base instalada">
+            <article class="summary-card total-card installed-total-card">
+              <div class="summary-label"><span class="summary-icon">◎</span> Unidades centrales</div>
+              <strong id="installed-summary-records">0</strong>
+              <p id="installed-summary-brands">0 fabricantes registrados</p>
+            </article>
+            <article class="summary-card">
+              <div class="summary-label"><span class="summary-icon installed-soft">C</span> Clientes</div>
+              <strong id="installed-summary-clients">0</strong>
+              <p>Clientes con equipos registrados</p>
+            </article>
+            <article class="summary-card">
+              <div class="summary-label"><span class="summary-icon installed-ok">✓</span> Con fecha</div>
+              <strong id="installed-summary-dated">0</strong>
+              <p id="installed-summary-date-range">Sin fechas registradas</p>
+            </article>
+            <article class="summary-card">
+              <div class="summary-label"><span class="summary-icon warning">!</span> Datos pendientes</div>
+              <strong id="installed-summary-incomplete">0</strong>
+              <p id="installed-summary-missing-note">Sin faltantes</p>
+            </article>
+          </div>
+
+          <section class="panel installed-panel">
+            <div class="panel-heading">
+              <div>
+                <h2>Equipos entregados</h2>
+                <p>Unidades centrales instaladas por cliente, con fecha y número de serie.</p>
+              </div>
+              <div class="table-actions">
+                <label class="search">
+                  <span aria-hidden="true">⌕</span>
+                  <input id="installed-search-input" type="search" placeholder="Buscar cliente, equipo o serie" />
+                </label>
+                <select id="installed-manufacturer-filter" aria-label="Filtrar por fabricante">
+                  <option value="">Todos los fabricantes</option>
+                </select>
+                <select id="installed-completeness-filter" aria-label="Filtrar por estado de datos">
+                  <option value="">Todos los estados</option>
+                  <option>Completo</option>
+                  <option>Fecha pendiente</option>
+                  <option>Serie pendiente</option>
+                  <option>Fecha y serie pendientes</option>
+                </select>
+                <button class="icon-button" type="button" id="installed-export-csv" title="Exportar base instalada en CSV" aria-label="Exportar base instalada en CSV">⇩</button>
+              </div>
+            </div>
+
+            <div class="table-wrap installed-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th class="sortable-th"><button class="sort-button" type="button" data-installed-sort-key="client" data-sort-label="cliente">Cliente <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th class="sortable-th"><button class="sort-button" type="button" data-installed-sort-key="model" data-sort-label="equipo">Equipo <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th class="sortable-th"><button class="sort-button" type="button" data-installed-sort-key="serial" data-sort-label="número de serie">Número de serie <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th class="sortable-th"><button class="sort-button" type="button" data-installed-sort-key="installationDate" data-sort-label="fecha de instalación">Instalación <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th class="sortable-th"><button class="sort-button" type="button" data-installed-sort-key="warrantyEnd" data-sort-label="fin de garantía">Fin de garantía <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th class="sortable-th"><button class="sort-button" type="button" data-installed-sort-key="completeness" data-sort-label="estado de datos">Estado <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th><span class="sr-only">Acciones</span></th>
+                  </tr>
+                </thead>
+                <tbody id="installed-body"></tbody>
+              </table>
+              <div id="installed-empty-state" class="empty-state">
+                <div class="empty-illustration installed-empty-illustration" aria-hidden="true">⌁</div>
+                <h3>Empezá por el primer equipo</h3>
+                <p>Registrá la unidad central, el cliente, su fecha de instalación y número de serie.</p>
+                <button class="button primary" type="button" id="installed-empty-add-button">Añadir primer equipo</button>
+              </div>
+              <div id="installed-no-results" class="empty-state compact" hidden>
+                <h3>No hay coincidencias</h3>
+                <p>Probá con otra búsqueda o quitá los filtros.</p>
+              </div>
+            </div>
+            <div class="panel-footer">
+              <span id="installed-table-count">0 equipos</span>
+              <span id="installed-last-update">Sin cambios todavía</span>
+            </div>
+          </section>
+        </section>
+
+        <section id="report-view" class="view">
+          <div class="report-toolbar no-print">
+            <div>
+              <p>Vista preparada para imprimir o guardar como PDF.</p>
+              <small>Combina el inventario de oficina incluido con el costo estimado del stock general.</small>
+            </div>
+            <button class="button primary" type="button" id="print-button">Imprimir / Guardar PDF</button>
+          </div>
+          <article class="report-sheet">
+            <div class="report-header">
+              <div>
+                <p class="eyebrow">DECLARACIÓN DE BIENES Y MERCADERÍAS</p>
+                <h2>Valorización consolidada para el seguro</h2>
+              </div>
+              <div class="report-brand">ARES<br /><span>ACTIVOS</span></div>
+            </div>
+            <div class="report-totals">
+              <div><span>Inventario de oficina</span><strong id="report-inventory-pyg">₲ 0</strong><small id="report-office-count">0 registros</small></div>
+              <div><span>Inventario convertido</span><strong id="report-inventory-usd">US$ 0,00</strong><small>Según el tipo de cambio indicado</small></div>
+              <div><span>Stock general valorizado</span><strong id="report-stock-usd">US$ 0,00</strong><small>Costo estimado previo a la venta</small></div>
+              <div class="grand-total"><span>Total base a considerar</span><strong id="report-total">US$ 0,00</strong><small id="report-total-pyg">Equivale a ₲ 0</small></div>
+            </div>
+            <p class="report-status-note" id="report-status-note"></p>
+            <div class="report-table-wrap">
+              <div class="report-section-heading">
+                <div><h3>1. Stock general valorizado</h3><p>Este importe forma parte del total del seguro. Se calcula en dólares, sin IVA y descontando la ganancia configurada en cada producto.</p></div>
+              </div>
+              <table class="report-table report-stock-summary">
+                <thead><tr><th>Línea</th><th>Con precio</th><th>Unidades</th><th>Cajas</th><th>Costo estimado</th></tr></thead>
+                <tbody id="report-stock-summary-body"></tbody>
+              </table>
+            </div>
+            <div class="report-meta">
+              <label>Empresa / titular <input id="report-owner" type="text" placeholder="Nombre o razón social" /></label>
+              <label>Dirección del riesgo <input id="report-address" type="text" placeholder="Dirección de la oficina" /></label>
+              <label>Fecha del informe <input id="report-date" type="date" /></label>
+              <label>Tipo de cambio PYG/USD <input id="report-exchange-rate" type="number" min="1" step="1" value="5900" /></label>
+              <label>Moneda consolidada <input value="Dólares estadounidenses (USD)" readonly /></label>
+            </div>
+            <div class="report-table-wrap">
+              <div class="report-section-heading">
+                <div><h3>2. Inventario de oficina incluido</h3><p>Detalle de los bienes marcados “Incluir”, expresados en guaraníes.</p></div>
+              </div>
+              <table class="report-table">
+                <thead>
+                  <tr>
+                    <th>N.º</th>
+                    <th class="sortable-th"><button class="sort-button" type="button" data-sort-key="name" data-sort-label="descripción">Descripción e identificación <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th class="sortable-th"><button class="sort-button" type="button" data-sort-key="location" data-sort-label="ubicación">Ubicación <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th class="sortable-th"><button class="sort-button" type="button" data-sort-key="quantity" data-sort-label="unidades">Cant. <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th class="sortable-th"><button class="sort-button" type="button" data-sort-key="condition" data-sort-label="estado">Estado <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th class="sortable-th"><button class="sort-button" type="button" data-sort-key="unitCost" data-sort-label="costo unitario">Costo unit. <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th class="sortable-th"><button class="sort-button" type="button" data-sort-key="total" data-sort-label="subtotal">Subtotal <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                  </tr>
+                </thead>
+                <tbody id="report-body"></tbody>
+              </table>
+              <p id="report-empty" class="report-empty">El inventario todavía no contiene bienes.</p>
+            </div>
+            <div class="report-notes">
+              <label>Observaciones generales<textarea id="report-notes" rows="3" placeholder="Aclaraciones para la aseguradora"></textarea></label>
+            </div>
+            <div class="signatures">
+              <div><span>Firma del responsable</span></div>
+              <div><span>Aclaración</span></div>
+              <div><span>Documento</span></div>
+            </div>
+            <p class="report-footnote">El total base suma el inventario de oficina incluido, convertido al tipo de cambio indicado, y el costo estimado del stock antes de la venta. No incluye bienes marcados “Revisar” ni registros de stock sin precio. Se recomienda validar el criterio y la moneda final con la aseguradora y adjuntar facturas, fotografías y demás respaldos disponibles.</p>
+          </article>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="item-dialog" class="modal">
+      <form id="item-form" method="dialog">
+        <div class="modal-header">
+          <div><p class="eyebrow">ACTIVO DE OFICINA</p><h2 id="dialog-title">Añadir bien</h2></div>
+          <button class="close-button" type="button" data-close aria-label="Cerrar">×</button>
+        </div>
+        <div class="form-grid">
+          <label class="span-2">Nombre del bien <span>*</span><input name="name" required placeholder="Ej.: Notebook Dell Latitude" /></label>
+          <label>Categoría <span>*</span>
+            <select name="category" required>
+              <option value="">Seleccionar</option>
+              <option>Equipos y tecnología</option><option>Muebles</option><option>Seguridad</option><option>Herramientas</option><option>Marketing y exhibición</option><option>Accesorios y decoración</option><option>Contenido general</option>
+            </select>
+          </label>
+          <label>Ubicación <span>*</span><input name="location" required placeholder="Ej.: Administración" /></label>
+          <label>Marca <input name="brand" placeholder="Marca" /></label>
+          <label>Modelo <input name="model" placeholder="Modelo" /></label>
+          <label>N.º de serie / patrimonio <input name="serial" placeholder="Serie o código interno" /></label>
+          <label>Estado
+            <select name="condition"><option selected>Sin verificar</option><option>Excelente</option><option>Bueno</option><option>Regular</option><option>Requiere reparación</option></select>
+          </label>
+          <label>Decisión para el seguro
+            <select name="decision"><option selected>Incluir</option><option>Revisar</option><option>Excluir</option></select>
+          </label>
+          <label>Cantidad <span>*</span><input name="quantity" type="number" min="1" step="1" value="1" required /></label>
+          <label>Valor unitario (₲) <span>*</span><input name="unitCost" type="number" min="0" step="1" inputmode="numeric" placeholder="0" required /><small class="field-help">Usá 0 si el valor todavía está pendiente.</small></label>
+          <label>Fecha de adquisición <input name="purchaseDate" type="date" /></label>
+          <label>Factura / comprobante <input name="receipt" placeholder="Número o referencia" /></label>
+          <label class="span-2">Notas <textarea name="notes" rows="3" placeholder="Detalles, accesorios incluidos o aclaraciones"></textarea></label>
+          <label class="span-2 photo-field">Foto del bien
+            <span class="file-control"><input id="photo-input" name="photo" type="file" accept="image/*" /><span>Elegir imagen</span><small id="photo-name">Sin archivo seleccionado</small></span>
+          </label>
+        </div>
+        <input type="hidden" name="id" />
+        <div class="modal-footer">
+          <button class="button ghost" type="button" data-close>Cancelar</button>
+          <button class="button primary" type="submit">Guardar bien</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="detail-dialog" class="modal detail-modal">
+      <div class="modal-header">
+        <div><p class="eyebrow">FICHA DEL BIEN</p><h2 id="detail-title"></h2></div>
+        <button class="close-button" type="button" data-detail-close aria-label="Cerrar">×</button>
+      </div>
+      <div id="detail-content"></div>
+      <div class="modal-footer">
+        <button class="button danger" type="button" id="delete-item">Eliminar</button>
+        <button class="button ghost" type="button" id="edit-item">Editar</button>
+        <button class="button primary" type="button" data-detail-close>Cerrar</button>
+      </div>
+    </dialog>
+
+    <dialog id="stock-dialog" class="modal stock-modal">
+      <form id="stock-form" method="dialog">
+        <div class="modal-header">
+          <div><p class="eyebrow">STOCK GENERAL</p><h2 id="stock-dialog-title">Añadir registro</h2></div>
+          <button class="close-button" type="button" data-stock-close aria-label="Cerrar">×</button>
+        </div>
+        <div class="form-grid">
+          <label class="span-2">Nombre del producto o equipo <span>*</span><input name="name" required placeholder="Ej.: Cartucho MPT 4.5" /></label>
+          <label>Línea <span>*</span>
+            <select name="category" required>
+              <option value="">Seleccionar</option>
+              <option>EQUIPOS</option><option>CLASSYS</option><option>CLASSYS 2.0</option><option>HYDRAFACIAL</option><option>AQUAPURE</option><option>BRERA</option><option>COOCON</option><option>ECLERIS</option><option>ENDYMED</option><option>ALQUIMIA</option><option>COSMETICA</option><option>INTERMEDIC</option><option>FINE</option><option>CANDELA</option><option>LUMENIS</option><option>VENUS</option><option>VIORA</option><option>ARES</option>
+            </select>
+          </label>
+          <label>Estado <span>*</span>
+            <select name="status" required>
+              <option>Disponible</option><option>No disponible</option><option>A préstamo</option>
+            </select>
+          </label>
+          <label>Marca <input name="brand" placeholder="Marca" /></label>
+          <label>Modelo <input name="model" placeholder="Modelo" /></label>
+          <label class="span-2">Número de serie <input name="serial" placeholder="Número de serie, si corresponde" /></label>
+          <label>Cajas <span>*</span><input name="boxes" type="number" min="0" step="1" value="0" required /></label>
+          <label>Unidades <span>*</span><input name="quantity" type="number" min="0" step="1" value="0" required /></label>
+          <label>Precio aplicado por <span>*</span>
+            <select name="priceBasis" required><option>Unidad</option><option>Caja</option></select>
+          </label>
+          <label>Precio de lista (US$, IVA incluido) <span>*</span><input name="listPriceUsd" type="number" min="0" step="0.01" value="0" required /></label>
+          <label>IVA incluido <span>*</span>
+            <select name="vatRate" required><option value="10">10%</option><option value="5">5%</option><option value="0">Exento</option></select>
+          </label>
+          <label>Ganancia aplicada <span>*</span><input name="marginPercent" type="number" min="0" max="300" step="1" value="40" required /><small class="field-help">Editable según el tipo de producto.</small></label>
+          <div class="valuation-preview valuation-breakdown span-2" aria-live="polite">
+            <div><span>Precio neto sin IVA</span><strong id="stock-form-net">US$ 0,00</strong></div>
+            <div><span>Costo estimado unitario</span><strong id="stock-form-unit-cost">US$ 0,00</strong></div>
+            <div class="valuation-total"><span>Costo total estimado para el seguro</span><strong id="stock-form-total">US$ 0,00</strong><small id="stock-form-total-note">0 unidades × US$ 0,00</small></div>
+            <p>El resultado es una estimación de costo previo a la venta; no es el precio de venta del producto.</p>
+          </div>
+          <label class="span-2">Notas <textarea name="notes" rows="3" placeholder="Destino, préstamo o aclaraciones"></textarea></label>
+        </div>
+        <input type="hidden" name="id" />
+        <div class="modal-footer">
+          <button class="button ghost" type="button" data-stock-close>Cancelar</button>
+          <button class="button primary" type="submit">Guardar registro</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="stock-detail-dialog" class="modal detail-modal stock-modal">
+      <div class="modal-header">
+        <div><p class="eyebrow">FICHA DE STOCK GENERAL</p><h2 id="stock-detail-title"></h2></div>
+        <button class="close-button" type="button" data-stock-detail-close aria-label="Cerrar">×</button>
+      </div>
+      <div id="stock-detail-content"></div>
+      <div class="modal-footer">
+        <button class="button danger" type="button" id="delete-stock-item">Eliminar</button>
+        <button class="button ghost" type="button" id="edit-stock-item">Editar</button>
+        <button class="button primary" type="button" data-stock-detail-close>Cerrar</button>
+      </div>
+    </dialog>
+
+    <dialog id="installed-dialog" class="modal installed-modal">
+      <form id="installed-form" method="dialog">
+        <div class="modal-header">
+          <div><p class="eyebrow">BASE INSTALADA</p><h2 id="installed-dialog-title">Añadir equipo</h2></div>
+          <button class="close-button" type="button" data-installed-close aria-label="Cerrar">×</button>
+        </div>
+        <div class="form-grid">
+          <label class="span-2">Cliente <span>*</span><input name="client" required placeholder="Nombre o razón social" /></label>
+          <label>Fabricante <input name="manufacturer" placeholder="Ej.: Lumenis" /></label>
+          <label>Modelo del equipo <span>*</span><input name="model" required placeholder="Ej.: Lightsheer Quattro" /></label>
+          <label>Número de serie <input name="serial" placeholder="Serie de la unidad central" /><small class="field-help">Podés dejarlo pendiente si todavía no fue verificado.</small></label>
+          <label>Fecha de instalación <input name="installationDate" type="date" /><small class="field-help">Fecha de entrega o puesta en marcha.</small></label>
+          <label>Fin de garantía <input name="warrantyEnd" type="date" /></label>
+          <label class="span-2">Observaciones <textarea name="notes" rows="3" placeholder="Sucursal, condición de demo, traslado u otra aclaración"></textarea></label>
+        </div>
+        <input type="hidden" name="id" />
+        <div class="modal-footer">
+          <button class="button ghost" type="button" data-installed-close>Cancelar</button>
+          <button class="button primary" type="submit">Guardar equipo</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="installed-detail-dialog" class="modal detail-modal installed-modal">
+      <div class="modal-header">
+        <div><p class="eyebrow">FICHA DE BASE INSTALADA</p><h2 id="installed-detail-title"></h2></div>
+        <button class="close-button" type="button" data-installed-detail-close aria-label="Cerrar">×</button>
+      </div>
+      <div id="installed-detail-content"></div>
+      <div class="modal-footer">
+        <button class="button danger" type="button" id="delete-installed-item">Eliminar</button>
+        <button class="button ghost" type="button" id="edit-installed-item">Editar</button>
+        <button class="button primary" type="button" data-installed-detail-close>Cerrar</button>
+      </div>
+    </dialog>
+
+    <dialog id="backup-dialog" class="modal small-modal">
+      <div class="modal-header">
+        <div><p class="eyebrow">SEGURIDAD DE DATOS</p><h2>Respaldo de ARES Activos</h2></div>
+        <button class="close-button" type="button" data-backup-close aria-label="Cerrar">×</button>
+      </div>
+      <p class="modal-intro">Descargá una copia para no depender solamente de este navegador. También podés restaurar un respaldo anterior.</p>
+      <div class="backup-options">
+        <button class="backup-option" type="button" id="export-json"><span>⇩</span><div><strong>Descargar respaldo</strong><small>Guarda el inventario, el stock, la base instalada y los datos del informe.</small></div></button>
+        <label class="backup-option"><span>⇧</span><div><strong>Restaurar respaldo</strong><small>Reemplaza los datos actuales con un archivo JSON.</small></div><input id="import-json" type="file" accept="application/json" /></label>
+      </div>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.102.0/dist/umd/supabase.min.js"></script>
+    <script src="cloud-config.js?v=1"></script>
+    <script src="app.js?v=10"></script>
+  </body>
+</html>
