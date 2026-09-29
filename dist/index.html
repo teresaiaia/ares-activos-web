@@ -7,27 +7,15 @@
     <meta name="theme-color" content="#12213f" />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%2312213f'/%3E%3Cpath d='M17 46 29 17h7l12 29h-8l-2-6H26l-2 6Zm12-13h6l-3-9Z' fill='%236fe0c1'/%3E%3C/svg%3E" />
     <title>Gestión de activos · ARES Activos</title>
-    <link rel="stylesheet" href="styles.css?v=11" />
+    <link rel="stylesheet" href="styles.css?v=12" />
   </head>
   <body class="cloud-loading">
     <section id="auth-screen" class="auth-screen" aria-labelledby="auth-title">
       <div class="auth-card">
         <div class="auth-brand" aria-hidden="true">A</div>
-        <p class="eyebrow">ARES ACTIVOS · ACCESO PRIVADO</p>
-        <h1 id="auth-title">Inventario protegido</h1>
-        <p id="auth-intro">Ingresá con tu correo para ver y actualizar la información desde cualquier computadora.</p>
-        <form id="auth-form" class="auth-form">
-          <label>Correo electrónico<input id="auth-email" type="email" autocomplete="email" required value="teresaferres@gmail.com" /></label>
-          <label>Contraseña<input id="auth-password" type="password" autocomplete="current-password" minlength="6" required /></label>
-          <button class="button primary" type="submit">Ingresar</button>
-          <button class="button ghost" type="button" id="signup-button">Crear mi acceso</button>
-          <button class="auth-link" type="button" id="forgot-password-button">Olvidé mi contraseña</button>
-        </form>
-        <form id="recovery-form" class="auth-form" hidden>
-          <label>Nueva contraseña<input id="recovery-password" type="password" autocomplete="new-password" minlength="6" required /></label>
-          <label>Repetir contraseña<input id="recovery-password-confirm" type="password" autocomplete="new-password" minlength="6" required /></label>
-          <button class="button primary" type="submit">Guardar nueva contraseña</button>
-        </form>
+        <p class="eyebrow">ARES ACTIVOS · ACCESO DIRECTO</p>
+        <h1 id="auth-title">Abriendo inventario</h1>
+        <p id="auth-intro">No necesitás usuario ni contraseña.</p>
         <p id="auth-message" class="auth-message" role="status" aria-live="polite">Conectando con la nube…</p>
       </div>
     </section>
@@ -60,9 +48,8 @@
         <div class="sidebar-note cloud-note">
           <span class="privacy-dot" id="sync-dot"></span>
           <div>
-            <strong id="sync-label">Nube conectada</strong>
-            <p id="sync-detail">Los cambios se guardan automáticamente.</p>
-            <button class="sidebar-logout" type="button" id="logout-button">Cerrar sesión</button>
+            <strong id="sync-label">Acceso directo</strong>
+            <p id="sync-detail">Sin contraseña. Los cambios se guardan automáticamente.</p>
           </div>
         </div>
       </aside>
@@ -579,6 +566,6 @@
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.102.0/dist/umd/supabase.min.js"></script>
     <script src="cloud-config.js?v=1"></script>
-    <script src="app.js?v=11"></script>
+    <script src="app.js?v=12"></script>
   </body>
 </html>
