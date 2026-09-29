@@ -7,16 +7,21 @@
     <meta name="theme-color" content="#12213f" />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%2312213f'/%3E%3Cpath d='M17 46 29 17h7l12 29h-8l-2-6H26l-2 6Zm12-13h6l-3-9Z' fill='%236fe0c1'/%3E%3C/svg%3E" />
     <title>Gestión de activos · ARES Activos</title>
-    <link rel="stylesheet" href="styles.css?v=12" />
+    <link rel="stylesheet" href="styles.css?v=13" />
   </head>
   <body class="cloud-loading">
     <section id="auth-screen" class="auth-screen" aria-labelledby="auth-title">
       <div class="auth-card">
         <div class="auth-brand" aria-hidden="true">A</div>
-        <p class="eyebrow">ARES ACTIVOS · ACCESO DIRECTO</p>
-        <h1 id="auth-title">Abriendo inventario</h1>
-        <p id="auth-intro">No necesitás usuario ni contraseña.</p>
-        <p id="auth-message" class="auth-message" role="status" aria-live="polite">Conectando con la nube…</p>
+        <p class="eyebrow">ARES ACTIVOS · ACCESO PRIVADO</p>
+        <h1 id="auth-title">Ingresar</h1>
+        <p id="auth-intro">Usá tu nombre de usuario y contraseña.</p>
+        <form id="auth-form" class="auth-form">
+          <label>Usuario<input id="auth-username" type="text" autocomplete="username" autocapitalize="none" required /></label>
+          <label>Contraseña<input id="auth-password" type="password" autocomplete="current-password" required /></label>
+          <button class="button primary" type="submit">Entrar</button>
+        </form>
+        <p id="auth-message" class="auth-message" role="status" aria-live="polite">Ingresá para continuar.</p>
       </div>
     </section>
 
@@ -48,8 +53,9 @@
         <div class="sidebar-note cloud-note">
           <span class="privacy-dot" id="sync-dot"></span>
           <div>
-            <strong id="sync-label">Acceso directo</strong>
-            <p id="sync-detail">Sin contraseña. Los cambios se guardan automáticamente.</p>
+            <strong id="sync-label">Sesión protegida</strong>
+            <p id="sync-detail">Los cambios se guardan automáticamente.</p>
+            <button class="sidebar-logout" type="button" id="logout-button">Cerrar sesión</button>
           </div>
         </div>
       </aside>
@@ -566,6 +572,6 @@
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.102.0/dist/umd/supabase.min.js"></script>
     <script src="cloud-config.js?v=1"></script>
-    <script src="app.js?v=12"></script>
+    <script src="app.js?v=13"></script>
   </body>
 </html>

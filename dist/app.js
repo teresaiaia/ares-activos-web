@@ -17,6 +17,10 @@
   const DEFAULT_STOCK_MARGIN_PERCENT = 40;
   const DEFAULT_INSURANCE_EXCHANGE_RATE = 5900;
   const STOCK_VALUATION_CRITERION = "Costo estimado previo a la venta";
+  const AUTH_USERS = {
+    teresa: { email: "teresaferres@gmail.com", name: "Teresa", scope: "full" },
+    jack: { email: "jack@aresactivos.app", name: "Jack", scope: "installed" }
+  };
   const money = new Intl.NumberFormat("es-PY", { style: "currency", currency: "PYG", maximumFractionDigits: 0 });
   const dateFormat = new Intl.DateTimeFormat("es-PY", { dateStyle: "medium" });
 
@@ -105,6 +109,9 @@
   let cloudReady = false;
   let cloudLoading = false;
   let cloudSaveTimer = null;
+  let installedCloudSaveTimer = null;
+  let activeCloudUser = null;
+  let activeAccess = null;
 
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -204,7 +211,7 @@
     localStorage.setItem(INSTALLED_META_KEY, JSON.stringify(installedMeta));
     localStorage.setItem(INSTALLED_SEED_KEY, installedMeta.seedVersion || "loaded");
     renderInstalled();
-    scheduleCloudSave();
+    scheduleInstalledCloudSave();
   }
 
   function cacheAllLocally() {
@@ -214,9 +221,21 @@
     localStorage.setItem(STOCK_STORAGE_KEY, JSON.stringify(stockItems));
     localStorage.setItem(STOCK_META_KEY, JSON.stringify(stockMeta));
     localStorage.setItem(STOCK_SEED_KEY, "loaded");
+    cacheInstalledLocally();
+  }
+
+  function cacheInstalledLocally() {
     localStorage.setItem(INSTALLED_STORAGE_KEY, JSON.stringify(installedItems));
     localStorage.setItem(INSTALLED_META_KEY, JSON.stringify(installedMeta));
     localStorage.setItem(INSTALLED_SEED_KEY, installedMeta.seedVersion || "loaded");
+  }
+
+  function clearRestrictedLocalState() {
+    items = [];
+    stockItems = [];
+    meta = { owner: "", address: "", date: new Date().toISOString().slice(0, 10), notes: "", insuranceExchangeRate: DEFAULT_INSURANCE_EXCHANGE_RATE, updatedAt: null };
+    stockMeta = { updatedAt: null, defaultMarginPercent: DEFAULT_STOCK_MARGIN_PERCENT };
+    [STORAGE_KEY, META_KEY, SEED_KEY, STOCK_STORAGE_KEY, STOCK_META_KEY, STOCK_SEED_KEY, STOCK_PRICE_IMPORT_KEY].forEach((key) => localStorage.removeItem(key));
   }
 
   function setSyncState(state, detail) {
@@ -226,32 +245,56 @@
     if (!note || !label || !description) return;
     note.classList.toggle("syncing", state === "syncing");
     note.classList.toggle("error", state === "error");
-    label.textContent = state === "syncing" ? "Guardando…" : state === "error" ? "Error de conexión" : "Acceso directo";
+    const accessLabel = activeAccess?.scope === "installed" ? "Jack · Base instalada" : "Teresa · Acceso completo";
+    label.textContent = state === "syncing" ? "Guardando…" : state === "error" ? "Error de conexión" : accessLabel;
     description.textContent = detail || (state === "syncing" ? "Enviando los cambios." : state === "error" ? "Los datos siguen guardados en este equipo." : "Los cambios se guardan automáticamente.");
   }
 
   function scheduleCloudSave() {
-    if (!cloudReady || cloudLoading || !cloudClient) return;
+    if (!cloudReady || cloudLoading || !cloudClient || !activeCloudUser || activeAccess?.scope !== "full") return;
     clearTimeout(cloudSaveTimer);
     setSyncState("syncing");
     cloudSaveTimer = setTimeout(pushCloudState, 500);
   }
 
+  function scheduleInstalledCloudSave() {
+    if (!cloudReady || cloudLoading || !cloudClient || !activeCloudUser || !activeAccess) return;
+    clearTimeout(installedCloudSaveTimer);
+    setSyncState("syncing");
+    installedCloudSaveTimer = setTimeout(pushInstalledCloudState, 500);
+  }
+
   async function pushCloudState() {
-    if (!cloudReady || cloudLoading || !cloudClient) return;
+    if (!cloudReady || cloudLoading || !cloudClient || !activeCloudUser || activeAccess?.scope !== "full") return;
     const updatedAt = new Date().toISOString();
     const { error } = await cloudClient.from("app_state").update({
       inventory: items,
       inventory_meta: meta,
       stock: stockItems,
       stock_meta: stockMeta,
-      installed_base: installedItems,
-      installed_meta: installedMeta,
       updated_at: updatedAt,
-      updated_by: null
+      updated_by: activeCloudUser.id
     }).eq("id", "main");
     if (error) {
       console.error("No se pudo sincronizar", error);
+      setSyncState("error", "Los cambios quedan guardados localmente hasta recuperar la conexión.");
+      showToast("No se pudo guardar en la nube");
+      return;
+    }
+    setSyncState("ready", `Último guardado: ${new Date(updatedAt).toLocaleTimeString("es-PY", { hour: "2-digit", minute: "2-digit" })}`);
+  }
+
+  async function pushInstalledCloudState() {
+    if (!cloudReady || cloudLoading || !cloudClient || !activeCloudUser || !activeAccess) return;
+    const updatedAt = new Date().toISOString();
+    const { error } = await cloudClient.from("installed_base_state").update({
+      installed_base: installedItems,
+      installed_meta: installedMeta,
+      updated_at: updatedAt,
+      updated_by: activeCloudUser.id
+    }).eq("id", "main");
+    if (error) {
+      console.error("No se pudo sincronizar la base instalada", error);
       setSyncState("error", "Los cambios quedan guardados localmente hasta recuperar la conexión.");
       showToast("No se pudo guardar en la nube");
       return;
@@ -816,6 +859,7 @@
   }
 
   function switchView(view) {
+    if (activeAccess?.scope === "installed" && view !== "installed") return;
     currentView = view;
     $$(".nav-item").forEach((button) => button.classList.toggle("active", button.dataset.view === view));
     $$(".view").forEach((section) => section.classList.toggle("active", section.id === `${view}-view`));
@@ -1007,13 +1051,16 @@
     element.className = `auth-message ${type}`.trim();
   }
 
-  function showAccessError(message) {
+  function showAuthScreen(message = "Ingresá para continuar.", type = "") {
     cloudReady = false;
-    $("#auth-title").textContent = "No se pudo abrir";
-    $("#auth-intro").textContent = "Revisá la conexión a Internet y volvé a cargar la página.";
-    document.body.classList.remove("cloud-loading", "cloud-ready");
+    cloudLoading = false;
+    activeCloudUser = null;
+    activeAccess = null;
+    $("#auth-title").textContent = "Ingresar";
+    $("#auth-intro").textContent = "Usá tu nombre de usuario y contraseña.";
+    document.body.classList.remove("cloud-loading", "cloud-ready", "role-installed", "stock-mode", "installed-mode");
     document.body.classList.add("auth-required");
-    setAccessMessage(message, "error");
+    setAccessMessage(message, type);
   }
 
   function showCloudApp() {
@@ -1024,41 +1071,90 @@
   async function loadCloudState() {
     cloudLoading = true;
     setSyncState("syncing", "Descargando la información más reciente.");
-    const { data, error } = await cloudClient.from("app_state").select("inventory, inventory_meta, stock, stock_meta, installed_base, installed_meta, updated_at").eq("id", "main").single();
-    if (error) {
+    const installedRequest = cloudClient.from("installed_base_state").select("installed_base, installed_meta, updated_at").eq("id", "main").single();
+    const appRequest = activeAccess?.scope === "full"
+      ? cloudClient.from("app_state").select("inventory, inventory_meta, stock, stock_meta, updated_at").eq("id", "main").single()
+      : Promise.resolve({ data: null, error: null });
+    const [{ data: appData, error: appError }, { data: installedData, error: installedError }] = await Promise.all([appRequest, installedRequest]);
+    if (appError || installedError) {
       cloudLoading = false;
-      throw error;
+      throw appError || installedError;
     }
-    items = (Array.isArray(data.inventory) ? data.inventory : []).map(normalizeItem);
-    meta = { ...meta, ...(data.inventory_meta || {}) };
-    stockItems = (Array.isArray(data.stock) ? data.stock : []).map(normalizeStockItem);
-    stockMeta = { ...stockMeta, ...(data.stock_meta || {}) };
-    installedItems = (Array.isArray(data.installed_base) ? data.installed_base : []).map(normalizeInstalledItem);
-    installedMeta = { ...installedMeta, ...(data.installed_meta || {}) };
-    cacheAllLocally();
+    if (activeAccess.scope === "full") {
+      items = (Array.isArray(appData.inventory) ? appData.inventory : []).map(normalizeItem);
+      meta = { ...meta, ...(appData.inventory_meta || {}) };
+      stockItems = (Array.isArray(appData.stock) ? appData.stock : []).map(normalizeStockItem);
+      stockMeta = { ...stockMeta, ...(appData.stock_meta || {}) };
+    } else {
+      clearRestrictedLocalState();
+    }
+    installedItems = (Array.isArray(installedData.installed_base) ? installedData.installed_base : []).map(normalizeInstalledItem);
+    installedMeta = { ...installedMeta, ...(installedData.installed_meta || {}) };
+    if (activeAccess.scope === "full") cacheAllLocally();
+    else cacheInstalledLocally();
     hydrateMeta();
     render();
     renderStock();
     renderInstalled();
+    document.body.classList.toggle("role-installed", activeAccess.scope === "installed");
+    switchView(activeAccess.scope === "installed" ? "installed" : "inventory");
     cloudLoading = false;
     cloudReady = true;
-    setSyncState("ready", `Actualizado: ${new Date(data.updated_at).toLocaleString("es-PY", { dateStyle: "short", timeStyle: "short" })}`);
+    const updatedAt = activeAccess.scope === "full" && appData?.updated_at > installedData.updated_at ? appData.updated_at : installedData.updated_at;
+    setSyncState("ready", `Actualizado: ${new Date(updatedAt).toLocaleString("es-PY", { dateStyle: "short", timeStyle: "short" })}`);
   }
 
-  async function initializeCloud() {
-    if (!cloudClient) {
-      showAccessError("No se pudo iniciar la conexión con la nube.");
+  async function openCloudSession(session) {
+    const email = session?.user?.email?.toLocaleLowerCase("es") || "";
+    const access = Object.values(AUTH_USERS).find((entry) => entry.email === email);
+    if (!access) {
+      await cloudClient.auth.signOut();
+      showAuthScreen("Este usuario no tiene acceso.", "error");
       return;
     }
-    setAccessMessage("Descargando la información más reciente…");
+    activeCloudUser = session.user;
+    activeAccess = access;
+    setAccessMessage(`Abriendo el acceso de ${access.name}…`);
     try {
       await loadCloudState();
       showCloudApp();
     } catch (error) {
       console.error("No se pudo abrir la información", error);
-      showAccessError("No se pudo descargar el inventario.");
+      await cloudClient.auth.signOut();
+      showAuthScreen("No se pudo abrir la información. Revisá la conexión e intentá nuevamente.", "error");
     }
   }
+
+  async function initializeCloud() {
+    if (!cloudClient) {
+      showAuthScreen("No se pudo iniciar la conexión con la nube.", "error");
+      return;
+    }
+    const { data: { session }, error } = await cloudClient.auth.getSession();
+    if (error || !session) showAuthScreen(error ? "No se pudo comprobar la sesión." : "Ingresá para continuar.", error ? "error" : "");
+    else await openCloudSession(session);
+  }
+
+  $("#auth-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const username = $("#auth-username").value.trim().toLocaleLowerCase("es");
+    const access = AUTH_USERS[username];
+    if (!access) return setAccessMessage("Usuario o contraseña incorrectos.", "error");
+    setAccessMessage("Comprobando tus datos…");
+    const { data, error } = await cloudClient.auth.signInWithPassword({ email: access.email, password: $("#auth-password").value });
+    if (error || !data.session) return setAccessMessage("Usuario o contraseña incorrectos.", "error");
+    $("#auth-password").value = "";
+    await openCloudSession(data.session);
+  });
+
+  $("#logout-button").addEventListener("click", async () => {
+    clearTimeout(cloudSaveTimer);
+    clearTimeout(installedCloudSaveTimer);
+    if (cloudReady && activeAccess?.scope === "full") await pushCloudState();
+    if (cloudReady && activeAccess) await pushInstalledCloudState();
+    await cloudClient.auth.signOut();
+    showAuthScreen("Sesión cerrada.", "success");
+  });
 
   function registerWebMCP() {
     const context = document.modelContext;
@@ -1098,5 +1194,5 @@
     tools.forEach((tool) => { try { context.registerTool(tool); } catch (error) { console.debug("WebMCP no disponible", error); } });
   }
 
-  hydrateMeta(); render(); renderStock(); renderInstalled(); registerWebMCP(); initializeCloud();
+  hydrateMeta(); render(); renderStock(); renderInstalled(); initializeCloud();
 })();
