@@ -24,8 +24,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: Preparar sitio sin datos sensibles incorporados
         run: |
-          mkdir _site
+          mkdir -p _site/vendor
           cp dist/index.html dist/app.js dist/styles.css dist/cloud-config.js _site/
+          cp dist/vendor/xlsx.full.min.js _site/vendor/
           touch _site/.nojekyll
       - uses: actions/upload-pages-artifact@v3
         with:
