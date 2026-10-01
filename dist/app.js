@@ -11,7 +11,8 @@
   const INSTALLED_SEED_KEY = "ares-installed-base-seed-2026-v1";
   const CATEGORIES = ["Equipos y tecnología", "Muebles", "Seguridad", "Herramientas", "Marketing y exhibición", "Accesorios y decoración", "Contenido general"];
   const DECISIONS = ["Incluir", "Revisar", "Excluir"];
-  const STOCK_CATEGORIES = ["EQUIPOS", "CLASSYS", "CLASSYS 2.0", "HYDRAFACIAL", "AQUAPURE", "BRERA", "COOCON", "ECLERIS", "ENDYMED", "ALQUIMIA", "COSMETICA", "INTERMEDIC", "FINE", "CANDELA", "LUMENIS", "VENUS", "VIORA", "ARES"];
+  const STOCK_RUBRICS = ["Equipos", "Cartuchos", "Insumos", "Repuestos", "Cosmética"];
+  const STOCK_RUBRIC_VERSION = "stock-rubrics-2026-09-v1";
   const STOCK_STATUSES = ["Disponible", "No disponible", "A préstamo"];
   const STOCK_PRICE_BASES = ["Unidad", "Caja"];
   const DEFAULT_STOCK_MARGIN_PERCENT = 40;
@@ -145,7 +146,7 @@
     const legacyNotes = [item.notes, item.location && `Ubicación anterior: ${item.location}`, item.unit && `Unidad anterior: ${item.unit}`].filter(Boolean).join(" · ");
     const defaultPriceBasis = Number(item.quantity) > 0 || Number(item.boxes) === 0 ? "Unidad" : "Caja";
     return {
-      id: item.id || uid(), name: item.name || "Producto sin nombre", category: item.category || "ARES",
+      id: item.id || uid(), name: item.name || "Producto sin nombre", category: item.category || "Insumos",
       brand: item.brand || "", model: item.model || "", serial: item.serial || "",
       status: STOCK_STATUSES.includes(item.status) ? item.status : (Number(item.quantity) > 0 ? "Disponible" : "No disponible"),
       boxes: Math.max(0, Math.round(Number(item.boxes) || 0)), quantity: Math.max(0, Math.round(Number(item.quantity) || 0)),
@@ -317,7 +318,36 @@
   function stockStatus(item) { return STOCK_STATUSES.includes(item.status) ? item.status : "No disponible"; }
   function stockStatusClass(item) { return stockStatus(item).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("es").replaceAll(" ", "-"); }
   function normalizedStockProductKey(value) { return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toLocaleUpperCase("es"); }
-  function consolidatedStockCategory(value) { return String(value || "ARES").replace(/\s+2\.0$/i, "").trim() || "ARES"; }
+  function consolidatedStockCategory(value) { return STOCK_RUBRICS.includes(value) ? value : "Insumos"; }
+  function inferStockRubric(item) {
+    if (STOCK_RUBRICS.includes(item.category)) return item.category;
+    const text = normalizedStockProductKey(`${item.name} ${item.model}`);
+    const previousCategory = normalizedStockProductKey(item.category);
+    if (previousCategory === "EQUIPOS") return "Equipos";
+    if (/\bCARTUCHO\b/.test(text)) return "Cartuchos";
+    if (/(PIEZA DE MANO|PIEZA MANO|MANGUERA|CONEXION|POWER STAGE|SENSOR DE PRESION|BOMBA DE AGUA|FLOW SWITCH|FILTRO DE AIRE|FILTRO DE AGUA|RUEDAS|SOPORTE PIEZA|APLICADOR|TAPON PIEZA|SET DE ACCESORIOS)/.test(text)) return "Repuestos";
+    if (["ALQUIMIA", "COSMETICA", "FINE"].includes(previousCategory) || /(EMULSION|MORE TO SKIN|AMPOLLAS|MASCARA|CLEANSYS|\bPEEL\b|REJUVE|\bSEBO\b|\bACTIV\b|ANTIOX|BETA HD|BOOSTER|GLYSAL|PERK EYES|PERK LIPS|RINSEAWAY|\bGLIDE\b)/.test(text)) return "Cosmética";
+    return "Insumos";
+  }
+  function migrateStockRubrics() {
+    if (stockMeta.rubricVersion === STOCK_RUBRIC_VERSION) return false;
+    const migratedAt = new Date().toISOString();
+    let migratedRecords = 0;
+    stockItems = stockItems.map((item) => {
+      const category = inferStockRubric(item);
+      if (category === item.category) return item;
+      migratedRecords += 1;
+      return { ...item, category, updatedAt: migratedAt };
+    });
+    const counts = STOCK_RUBRICS.reduce((result, rubric) => {
+      result[rubric] = stockItems.filter((item) => item.category === rubric).length;
+      return result;
+    }, {});
+    stockMeta.rubricVersion = STOCK_RUBRIC_VERSION;
+    stockMeta.rubricMigration = { version: STOCK_RUBRIC_VERSION, migratedAt, migratedRecords, counts };
+    stockMeta.updatedAt = migratedAt;
+    return true;
+  }
   function formatDate(value) { if (!value) return "—"; const d = new Date(`${value}T12:00:00`); return Number.isNaN(d.getTime()) ? "—" : dateFormat.format(d); }
   function uid() { return globalThis.crypto?.randomUUID?.() || `item-${Date.now()}-${Math.random().toString(16).slice(2)}`; }
 
@@ -357,7 +387,7 @@
 
     const groupedStock = new Map();
     stockItems.forEach((item) => {
-      const category = item.category || "Sin línea";
+      const category = item.category || "Sin rubro";
       const group = groupedStock.get(category) || { category, records: 0, priced: 0, units: 0, boxes: 0, totalUsd: 0 };
       group.records += 1;
       if (Number(item.listPriceUsd) > 0) group.priced += 1;
@@ -529,7 +559,7 @@
     $("#stock-summary-value").textContent = formatStockMoney(totalValue);
     $("#stock-summary-unpriced").textContent = `${unpriced.toLocaleString("es-PY")} ${unpriced === 1 ? "registro sin precio de lista" : "registros sin precio de lista"}`;
     $("#stock-summary-records").textContent = stockItems.length.toLocaleString("es-PY");
-    $("#stock-summary-categories").textContent = `${categories} ${categories === 1 ? "línea de stock" : "líneas de stock"}`;
+    $("#stock-summary-categories").textContent = `${categories} ${categories === 1 ? "rubro" : "rubros"}`;
     $("#stock-summary-available").textContent = available.toLocaleString("es-PY");
     $("#stock-summary-status-note").textContent = `${unavailable.toLocaleString("es-PY")} no disponibles · ${loans.toLocaleString("es-PY")} a préstamo`;
     $("#stock-summary-units").textContent = units.toLocaleString("es-PY");
@@ -538,8 +568,8 @@
     $("#stock-default-margin").value = stockMeta.defaultMarginPercent;
 
     const selectedCategory = $("#stock-category-filter").value;
-    const usedCategories = [...new Set([...STOCK_CATEGORIES, ...stockItems.map((item) => item.category)])].filter((category) => stockItems.some((item) => item.category === category));
-    $("#stock-category-filter").innerHTML = `<option value="">Todas las líneas</option>${usedCategories.map((category) => `<option ${category === selectedCategory ? "selected" : ""}>${escapeHTML(category)}</option>`).join("")}`;
+    const usedCategories = STOCK_RUBRICS.filter((category) => stockItems.some((item) => item.category === category));
+    $("#stock-category-filter").innerHTML = `<option value="">Todos los rubros</option>${usedCategories.map((category) => `<option ${category === selectedCategory ? "selected" : ""}>${escapeHTML(category)}</option>`).join("")}`;
 
     const visible = filteredStockItems();
     renderStockSortControls();
@@ -896,7 +926,7 @@
     $("#stock-detail-content").innerHTML = `<div class="detail-layout stock-detail-layout">
       <div class="detail-photo detail-placeholder stock-detail-placeholder">${escapeHTML(item.name.charAt(0).toUpperCase())}</div>
       <dl class="detail-list">
-        <div><dt>Línea</dt><dd>${escapeHTML(item.category)}</dd></div><div><dt>Estado</dt><dd><span class="stock-status ${stockStatusClass(item)}">${status}</span></dd></div>
+        <div><dt>Rubro</dt><dd>${escapeHTML(item.category)}</dd></div><div><dt>Estado</dt><dd><span class="stock-status ${stockStatusClass(item)}">${status}</span></dd></div>
         <div><dt>Marca</dt><dd>${escapeHTML(item.brand || "—")}</dd></div><div><dt>Modelo</dt><dd>${escapeHTML(item.model || "—")}</dd></div>
         <div><dt>Número de serie</dt><dd>${escapeHTML(item.serial || "—")}</dd></div><div><dt>Fuente</dt><dd>${escapeHTML(item.source || "Registro manual")}</dd></div>
         <div><dt>Cajas</dt><dd>${Number(item.boxes).toLocaleString("es-PY")}</dd></div><div><dt>Unidades</dt><dd><strong>${Number(item.quantity).toLocaleString("es-PY")}</strong></dd></div>
@@ -981,18 +1011,111 @@
   }
 
   function exportStockCSV() {
-    const headers = ["Producto o equipo", "Línea", "Marca", "Modelo", "Número de serie", "Estado", "Cajas", "Unidades", "Precio aplicado por", "Precio de lista USD (IVA incluido)", "IVA %", "Precio neto USD", "Ganancia %", "Costo unitario estimado USD", "Costo total estimado USD", "Fuente del precio", "Criterio de valorización", "Notas", "Fuente del inventario"];
+    const headers = ["Producto o equipo", "Rubro", "Marca", "Modelo", "Número de serie", "Estado", "Cajas", "Unidades", "Precio aplicado por", "Precio de lista USD (IVA incluido)", "IVA %", "Precio neto USD", "Ganancia %", "Costo unitario estimado USD", "Costo total estimado USD", "Fuente del precio", "Criterio de valorización", "Notas", "Fuente del inventario"];
     const rows = stockItems.map((item) => [item.name, item.category, item.brand, item.model, item.serial, stockStatus(item), item.boxes, item.quantity, item.priceBasis, item.listPriceUsd, item.vatRate, stockNetPrice(item), item.marginPercent, stockEstimatedUnitCost(item), stockEstimatedTotalCost(item), item.priceSource, STOCK_VALUATION_CRITERION, item.notes, item.source]);
     download(`stock-general-ares-${new Date().toISOString().slice(0, 10)}.csv`, `\ufeff${[headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n")}`, "text/csv;charset=utf-8");
     showToast("Stock exportado en CSV");
   }
 
-  function exportGroupedStockCSV() {
-    const groups = consolidatedStockItems();
+  function localDateStamp(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  function filenamePart(value) {
+    return String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLocaleLowerCase("es")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 45);
+  }
+
+  function exportGroupedStockExcel() {
+    if (!window.XLSX) {
+      showToast("No se pudo preparar el archivo Excel");
+      return;
+    }
+
+    const visible = filteredGroupedStockItems(consolidatedStockItems());
+    if (!visible.length) {
+      showToast("No hay resultados para exportar");
+      return;
+    }
+
+    const query = $("#grouped-stock-search-input").value.trim();
+    const category = $("#grouped-stock-category-filter").value;
+    const totalValue = visible.reduce((sum, item) => sum + Number(item.estimatedTotalCostUsd || 0), 0);
     const headers = ["Producto o equipo", "Rubro", "Marca", "Modelo", "Registros detallados agrupados", "Cajas", "Unidades", "Precio aplicado por", "Precio de lista USD (IVA incluido)", "Precio neto USD", "Ganancia %", "Costo unitario estimado USD", "Costo total estimado USD", "Observación del precio", "Criterio de valorización"];
-    const rows = groups.map((item) => [item.name, item.category, item.brand, item.model, item.recordCount, item.boxes, item.quantity, item.priceBasis, item.listPriceUsd, item.netPriceUsd, item.marginPercent, item.estimatedUnitCostUsd, item.estimatedTotalCostUsd, item.hasPartialPricing ? "Precio parcial" : item.priceVariants > 1 ? "Promedio ponderado" : "Precio uniforme", STOCK_VALUATION_CRITERION]);
-    download(`stock-consolidado-ares-${new Date().toISOString().slice(0, 10)}.csv`, `\ufeff${[headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n")}`, "text/csv;charset=utf-8");
-    showToast("Stock consolidado exportado en CSV");
+    const rows = visible.map((item) => [
+      item.name,
+      item.category,
+      item.brand,
+      item.model,
+      item.recordCount,
+      item.boxes,
+      item.quantity,
+      item.priceBasis,
+      item.listPriceUsd || null,
+      item.netPriceUsd || null,
+      item.listPriceUsd ? item.marginPercent / 100 : null,
+      item.estimatedUnitCostUsd || null,
+      item.estimatedTotalCostUsd || null,
+      item.hasPartialPricing ? "Precio parcial" : item.priceVariants > 1 ? "Promedio ponderado" : "Precio uniforme",
+      STOCK_VALUATION_CRITERION
+    ]);
+    const exportRows = [
+      ["ARES Activos · Stock consolidado"],
+      ["Fecha de exportación", new Date().toLocaleString("es-PY")],
+      ["Búsqueda aplicada", query || "Todas"],
+      ["Rubro aplicado", category || "Todos"],
+      ["Resultados exportados", visible.length],
+      ["Costo total estimado USD", totalValue],
+      [],
+      headers,
+      ...rows
+    ];
+    const worksheet = window.XLSX.utils.aoa_to_sheet(exportRows);
+    const headerRow = 7;
+    const firstDataRow = headerRow + 1;
+    const lastDataRow = firstDataRow + rows.length - 1;
+    const currencyColumns = [8, 9, 11, 12];
+
+    worksheet["!cols"] = [
+      { wch: 34 }, { wch: 16 }, { wch: 18 }, { wch: 22 }, { wch: 14 },
+      { wch: 10 }, { wch: 11 }, { wch: 18 }, { wch: 20 }, { wch: 18 },
+      { wch: 12 }, { wch: 22 }, { wch: 22 }, { wch: 21 }, { wch: 42 }
+    ];
+    worksheet["!autofilter"] = {
+      ref: window.XLSX.utils.encode_range({ s: { r: headerRow, c: 0 }, e: { r: lastDataRow, c: headers.length - 1 } })
+    };
+    const totalCell = worksheet[window.XLSX.utils.encode_cell({ r: 5, c: 1 })];
+    if (totalCell) totalCell.z = '"US$" #,##0.00';
+    for (let rowIndex = firstDataRow; rowIndex <= lastDataRow; rowIndex += 1) {
+      currencyColumns.forEach((columnIndex) => {
+        const cell = worksheet[window.XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex })];
+        if (cell) cell.z = '"US$" #,##0.00';
+      });
+      const marginCell = worksheet[window.XLSX.utils.encode_cell({ r: rowIndex, c: 10 })];
+      if (marginCell) marginCell.z = "0.00%";
+    }
+
+    const workbook = window.XLSX.utils.book_new();
+    workbook.Props = {
+      Title: "ARES Activos - Stock consolidado",
+      Subject: "Valorización del stock filtrado para el seguro",
+      Author: "ARES Activos",
+      CreatedDate: new Date()
+    };
+    window.XLSX.utils.book_append_sheet(workbook, worksheet, "Stock consolidado");
+
+    const filterPart = filenamePart(category || query);
+    const filename = `stock-consolidado${filterPart ? `-${filterPart}` : ""}-${localDateStamp()}.xlsx`;
+    window.XLSX.writeFile(workbook, filename, { compression: true });
+    showToast(`Excel descargado: ${visible.length} ${visible.length === 1 ? "producto" : "productos"}`);
   }
 
   function exportInstalledCSV() {
@@ -1161,7 +1284,7 @@
   }));
   $("#export-csv").addEventListener("click", exportCSV);
   $("#stock-export-csv").addEventListener("click", exportStockCSV);
-  $("#grouped-stock-export-csv").addEventListener("click", exportGroupedStockCSV);
+  $("#grouped-stock-export-xlsx").addEventListener("click", exportGroupedStockExcel);
   $("#installed-export-csv").addEventListener("click", exportInstalledCSV);
   $("#backup-button").addEventListener("click", () => backupDialog.showModal());
   $("#print-button").addEventListener("click", () => window.print());
@@ -1241,6 +1364,7 @@
       meta = { ...meta, ...(appData.inventory_meta || {}) };
       stockItems = (Array.isArray(appData.stock) ? appData.stock : []).map(normalizeStockItem);
       stockMeta = { ...stockMeta, ...(appData.stock_meta || {}) };
+      migrateStockRubrics();
     } else {
       clearRestrictedLocalState();
     }
@@ -1257,7 +1381,12 @@
     cloudLoading = false;
     cloudReady = true;
     const updatedAt = activeAccess.scope === "full" && appData?.updated_at > installedData.updated_at ? appData.updated_at : installedData.updated_at;
-    setSyncState("ready", `Actualizado: ${new Date(updatedAt).toLocaleString("es-PY", { dateStyle: "short", timeStyle: "short" })}`);
+    if (activeAccess.scope === "full" && stockMeta.rubricVersion === STOCK_RUBRIC_VERSION && appData?.stock_meta?.rubricVersion !== STOCK_RUBRIC_VERSION) {
+      setSyncState("syncing", "Guardando la nueva clasificación por rubros.");
+      await pushCloudState();
+    } else {
+      setSyncState("ready", `Actualizado: ${new Date(updatedAt).toLocaleString("es-PY", { dateStyle: "short", timeStyle: "short" })}`);
+    }
   }
 
   async function openCloudSession(session) {
@@ -1327,14 +1456,14 @@
         execute: (input) => { if (!input?.name || !input?.category || !input?.location || !Number.isInteger(input.quantity) || input.quantity < 1 || !Number.isInteger(input.unitCost) || input.unitCost < 0) throw new Error("Datos inválidos"); const item = { id: uid(), name: input.name.trim(), category: input.category.trim(), location: input.location.trim(), brand: "", model: "", serial: "", condition: input.condition || "Sin verificar", decision: "Incluir", quantity: input.quantity, unitCost: input.unitCost, purchaseDate: "", receipt: "", notes: "", source: "Registro manual", photo: "", updatedAt: new Date().toISOString() }; items.unshift(item); save(); return { id: item.id, name: item.name, subtotalPYG: subtotal(item) }; }
       },
       {
-        name: "list_office_stock", title: "Consultar stock general", description: "Devuelve los equipos y productos del stock general de ARES, agrupados por línea y estado.",
+        name: "list_office_stock", title: "Consultar stock general", description: "Devuelve los equipos y productos del stock general de ARES, agrupados por rubro y estado.",
         inputSchema: { type: "object", properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true, untrustedContentHint: true },
         execute: () => ({ records: stockItems.length, totalUnits: stockItems.reduce((sum, item) => sum + item.quantity, 0), totalBoxes: stockItems.reduce((sum, item) => sum + item.boxes, 0), totalEstimatedCostUSD: stockItems.reduce((sum, item) => sum + stockEstimatedTotalCost(item), 0), availableRecords: stockItems.filter((item) => stockStatus(item) === "Disponible").length, items: stockItems.map((item) => ({ ...item, status: stockStatus(item), netPriceUSD: stockNetPrice(item), estimatedUnitCostUSD: stockEstimatedUnitCost(item), estimatedTotalCostUSD: stockEstimatedTotalCost(item) })) })
       },
       {
         name: "add_office_stock_item", title: "Añadir registro al stock general", description: "Añade un equipo o producto al stock general de ARES.",
-        inputSchema: { type: "object", properties: { name: { type: "string" }, category: { type: "string" }, brand: { type: "string" }, model: { type: "string" }, serial: { type: "string" }, status: { type: "string", enum: STOCK_STATUSES }, boxes: { type: "integer", minimum: 0 }, quantity: { type: "integer", minimum: 0 }, priceBasis: { type: "string", enum: STOCK_PRICE_BASES }, listPriceUsd: { type: "number", minimum: 0 }, vatRate: { type: "number", enum: [0, 5, 10] }, marginPercent: { type: "number", minimum: 0 }, notes: { type: "string" } }, required: ["name", "category", "status", "boxes", "quantity"], additionalProperties: false }, annotations: { readOnlyHint: false, untrustedContentHint: false },
-        execute: (input) => { if (!input?.name || !input?.category || !STOCK_STATUSES.includes(input.status) || !Number.isInteger(input.boxes) || input.boxes < 0 || !Number.isInteger(input.quantity) || input.quantity < 0) throw new Error("Datos inválidos"); const item = normalizeStockItem({ marginPercent: stockMeta.defaultMarginPercent, ...input, id: uid(), updatedAt: new Date().toISOString() }); stockItems.unshift(item); saveStock(); return { id: item.id, name: item.name, status: stockStatus(item) }; }
+        inputSchema: { type: "object", properties: { name: { type: "string" }, category: { type: "string", enum: STOCK_RUBRICS }, brand: { type: "string" }, model: { type: "string" }, serial: { type: "string" }, status: { type: "string", enum: STOCK_STATUSES }, boxes: { type: "integer", minimum: 0 }, quantity: { type: "integer", minimum: 0 }, priceBasis: { type: "string", enum: STOCK_PRICE_BASES }, listPriceUsd: { type: "number", minimum: 0 }, vatRate: { type: "number", enum: [0, 5, 10] }, marginPercent: { type: "number", minimum: 0 }, notes: { type: "string" } }, required: ["name", "category", "status", "boxes", "quantity"], additionalProperties: false }, annotations: { readOnlyHint: false, untrustedContentHint: false },
+        execute: (input) => { if (!input?.name || !STOCK_RUBRICS.includes(input?.category) || !STOCK_STATUSES.includes(input.status) || !Number.isInteger(input.boxes) || input.boxes < 0 || !Number.isInteger(input.quantity) || input.quantity < 0) throw new Error("Datos inválidos"); const item = normalizeStockItem({ marginPercent: stockMeta.defaultMarginPercent, ...input, id: uid(), updatedAt: new Date().toISOString() }); stockItems.unshift(item); saveStock(); return { id: item.id, name: item.name, status: stockStatus(item) }; }
       },
       {
         name: "list_installed_base", title: "Consultar base instalada", description: "Devuelve las unidades centrales entregadas por ARES con cliente, equipo, fecha de instalación y número de serie.",

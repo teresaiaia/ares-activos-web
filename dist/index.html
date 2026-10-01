@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#12213f" />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%2312213f'/%3E%3Cpath d='M17 46 29 17h7l12 29h-8l-2-6H26l-2 6Zm12-13h6l-3-9Z' fill='%236fe0c1'/%3E%3C/svg%3E" />
     <title>Gestión de activos · ARES Activos</title>
-    <link rel="stylesheet" href="styles.css?v=14" />
+    <link rel="stylesheet" href="styles.css?v=16" />
   </head>
   <body class="cloud-loading">
     <section id="auth-screen" class="auth-screen" aria-labelledby="auth-title">
@@ -165,7 +165,7 @@
             <article class="summary-card">
               <div class="summary-label"><span class="summary-icon stock-neutral">▦</span> Registros</div>
               <strong id="stock-summary-records">0</strong>
-              <p id="stock-summary-categories">0 líneas de stock</p>
+              <p id="stock-summary-categories">0 rubros</p>
             </article>
             <article class="summary-card">
               <div class="summary-label"><span class="summary-icon stock-alert">✓</span> Disponibles</div>
@@ -203,8 +203,8 @@
                   <span aria-hidden="true">⌕</span>
                   <input id="stock-search-input" type="search" placeholder="Buscar producto, marca, modelo o serie" />
                 </label>
-                <select id="stock-category-filter" aria-label="Filtrar stock por categoría">
-                  <option value="">Todas las líneas</option>
+                <select id="stock-category-filter" aria-label="Filtrar stock por rubro">
+                  <option value="">Todos los rubros</option>
                 </select>
                 <select id="stock-status-filter" aria-label="Filtrar stock por estado">
                   <option value="">Todos los estados</option>
@@ -219,7 +219,7 @@
                 <thead>
                   <tr>
                     <th class="sortable-th"><button class="sort-button" type="button" data-stock-sort-key="name" data-sort-label="producto">Producto <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
-                    <th class="sortable-th"><button class="sort-button" type="button" data-stock-sort-key="category" data-sort-label="línea">Línea <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th class="sortable-th"><button class="sort-button" type="button" data-stock-sort-key="category" data-sort-label="rubro">Rubro <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
                     <th class="sortable-th"><button class="sort-button" type="button" data-stock-sort-key="brand" data-sort-label="marca">Marca <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
                     <th class="sortable-th"><button class="sort-button" type="button" data-stock-sort-key="model" data-sort-label="modelo">Modelo <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
                     <th class="sortable-th"><button class="sort-button" type="button" data-stock-sort-key="serial" data-sort-label="número de serie">Serie <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
@@ -304,7 +304,7 @@
                 <select id="grouped-stock-category-filter" aria-label="Filtrar stock consolidado por rubro">
                   <option value="">Todos los rubros</option>
                 </select>
-                <button class="icon-button" type="button" id="grouped-stock-export-csv" title="Exportar stock consolidado en CSV" aria-label="Exportar stock consolidado en CSV">⇩</button>
+                <button class="button ghost grouped-stock-excel-button" type="button" id="grouped-stock-export-xlsx" title="Exportar a Excel los resultados visibles" aria-label="Exportar a Excel los resultados visibles"><span aria-hidden="true">⇩</span> Excel</button>
               </div>
             </div>
 
@@ -453,7 +453,7 @@
                 <div><h3>1. Stock general valorizado</h3><p>Este importe forma parte del total del seguro. Se calcula en dólares, sin IVA y descontando la ganancia configurada en cada producto.</p></div>
               </div>
               <table class="report-table report-stock-summary">
-                <thead><tr><th>Línea</th><th>Con precio</th><th>Unidades</th><th>Cajas</th><th>Costo estimado</th></tr></thead>
+                <thead><tr><th>Rubro</th><th>Con precio</th><th>Unidades</th><th>Cajas</th><th>Costo estimado</th></tr></thead>
                 <tbody id="report-stock-summary-body"></tbody>
               </table>
             </div>
@@ -560,10 +560,10 @@
         </div>
         <div class="form-grid">
           <label class="span-2">Nombre del producto o equipo <span>*</span><input name="name" required placeholder="Ej.: Cartucho MPT 4.5" /></label>
-          <label>Línea <span>*</span>
+          <label>Rubro <span>*</span>
             <select name="category" required>
               <option value="">Seleccionar</option>
-              <option>EQUIPOS</option><option>CLASSYS</option><option>CLASSYS 2.0</option><option>HYDRAFACIAL</option><option>AQUAPURE</option><option>BRERA</option><option>COOCON</option><option>ECLERIS</option><option>ENDYMED</option><option>ALQUIMIA</option><option>COSMETICA</option><option>INTERMEDIC</option><option>FINE</option><option>CANDELA</option><option>LUMENIS</option><option>VENUS</option><option>VIORA</option><option>ARES</option>
+              <option>Equipos</option><option>Cartuchos</option><option>Insumos</option><option>Repuestos</option><option>Cosmética</option>
             </select>
           </label>
           <label>Estado <span>*</span>
@@ -663,7 +663,8 @@
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.102.0/dist/umd/supabase.min.js"></script>
+    <script src="vendor/xlsx.full.min.js?v=0.20.3"></script>
     <script src="cloud-config.js?v=1"></script>
-    <script src="app.js?v=14"></script>
+    <script src="app.js?v=16"></script>
   </body>
 </html>
