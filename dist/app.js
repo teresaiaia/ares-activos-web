@@ -6,6 +6,9 @@
   const STOCK_META_KEY = "ares-office-stock-meta-v1";
   const STOCK_SEED_KEY = "ares-general-stock-seed-2026-v1";
   const STOCK_PRICE_IMPORT_KEY = "ares-general-stock-price-import-v1";
+  const CONSOLIDATED_STOCK_STORAGE_KEY = "ares-consolidated-stock-v1";
+  const CONSOLIDATED_STOCK_META_KEY = "ares-consolidated-stock-meta-v1";
+  const CONSOLIDATED_STOCK_VERSION = 1;
   const INSTALLED_STORAGE_KEY = "ares-installed-base-v1";
   const INSTALLED_META_KEY = "ares-installed-base-meta-v1";
   const INSTALLED_SEED_KEY = "ares-installed-base-seed-2026-v1";
@@ -29,6 +32,7 @@
   const shouldLoadSeed = (!Array.isArray(storedItems) || storedItems.length === 0) && !localStorage.getItem(SEED_KEY);
   const storedStockItems = loadJSON(STOCK_STORAGE_KEY, null);
   const shouldLoadStockSeed = (!Array.isArray(storedStockItems) || storedStockItems.length === 0) && !localStorage.getItem(STOCK_SEED_KEY);
+  const storedConsolidatedItems = loadJSON(CONSOLIDATED_STOCK_STORAGE_KEY, null);
   const storedInstalledItems = loadJSON(INSTALLED_STORAGE_KEY, null);
   const installedSeedMeta = window.ARES_INSTALLED_BASE_SEED_META || {};
   const installedSeedItems = (window.ARES_INSTALLED_BASE_SEED || []).map(normalizeInstalledItem);
@@ -45,6 +49,15 @@
   let stockItems = (shouldLoadStockSeed ? (window.ARES_STOCK_SEED || []) : (storedStockItems || [])).map(normalizeStockItem);
   let stockMeta = loadJSON(STOCK_META_KEY, { updatedAt: shouldLoadStockSeed ? "2026-09-11T00:00:00.000Z" : null, defaultMarginPercent: DEFAULT_STOCK_MARGIN_PERCENT });
   stockMeta.defaultMarginPercent = Number.isFinite(Number(stockMeta.defaultMarginPercent)) ? Math.min(300, Math.max(0, Number(stockMeta.defaultMarginPercent))) : DEFAULT_STOCK_MARGIN_PERCENT;
+  let consolidatedItems = Array.isArray(storedConsolidatedItems)
+    ? storedConsolidatedItems.map(normalizeConsolidatedStockItem)
+    : deriveConsolidatedStockItems(stockItems);
+  let consolidatedMeta = loadJSON(CONSOLIDATED_STOCK_META_KEY, {
+    version: CONSOLIDATED_STOCK_VERSION,
+    initializedAt: new Date().toISOString(),
+    updatedAt: stockMeta.updatedAt || null,
+    source: "Copia inicial del Stock General"
+  });
   let installedItems = shouldLoadInstalledSeed
     ? installedSeedItems
     : shouldRefreshInstalledSeed
@@ -90,6 +103,11 @@
     localStorage.setItem(STOCK_META_KEY, JSON.stringify(stockMeta));
     localStorage.setItem(STOCK_SEED_KEY, "loaded");
   }
+  if (!Array.isArray(storedConsolidatedItems)) {
+    consolidatedItems = deriveConsolidatedStockItems(stockItems);
+    localStorage.setItem(CONSOLIDATED_STOCK_STORAGE_KEY, JSON.stringify(consolidatedItems));
+    localStorage.setItem(CONSOLIDATED_STOCK_META_KEY, JSON.stringify(consolidatedMeta));
+  }
   if (shouldLoadInstalledSeed || shouldRefreshInstalledSeed) {
     localStorage.setItem(INSTALLED_STORAGE_KEY, JSON.stringify(installedItems));
     localStorage.setItem(INSTALLED_META_KEY, JSON.stringify(installedMeta));
@@ -97,6 +115,7 @@
   }
   let selectedId = null;
   let selectedStockId = null;
+  let selectedConsolidatedId = null;
   let selectedInstalledId = null;
   let pendingPhoto = "";
   let sortState = { key: "", direction: "asc" };
@@ -123,6 +142,8 @@
   const stockForm = $("#stock-form");
   const stockDialog = $("#stock-dialog");
   const stockDetailDialog = $("#stock-detail-dialog");
+  const consolidatedStockForm = $("#consolidated-stock-form");
+  const consolidatedStockDialog = $("#consolidated-stock-dialog");
   const installedForm = $("#installed-form");
   const installedDialog = $("#installed-dialog");
   const installedDetailDialog = $("#installed-detail-dialog");
@@ -138,7 +159,7 @@
       brand: item.brand || "", model: item.model || "", serial: item.serial || "", condition: item.condition || "Sin verificar",
       decision: DECISIONS.includes(item.decision) ? item.decision : "Incluir", quantity: Math.max(1, Math.round(Number(item.quantity) || 1)),
       unitCost: Math.max(0, Math.round(Number(item.unitCost) || 0)), purchaseDate: item.purchaseDate || "", receipt: item.receipt || "",
-      notes: item.notes || "", source: item.source || "Registro manual", photo: item.photo || "", updatedAt: item.updatedAt || new Date().toISOString()
+      notes: item.notes || "", source: item.source || "Registro manual", photo: item.photo || "", verified: item.verified === true, updatedAt: item.updatedAt || new Date().toISOString()
     };
   }
 
@@ -158,6 +179,68 @@
       priceSource: item.priceSource || "", priceSourceRow: Number(item.priceSourceRow) || null,
       notes: legacyNotes, source: item.source || "Registro manual", updatedAt: item.updatedAt || new Date().toISOString()
     };
+  }
+
+  function normalizeConsolidatedStockItem(item) {
+    const normalized = normalizeStockItem({ ...item, serial: "", status: "Disponible" });
+    const valuationQuantity = normalized.priceBasis === "Caja" ? normalized.boxes : normalized.quantity;
+    const totalCost = valuationQuantity * stockEstimatedUnitCost(normalized);
+    return {
+      ...normalized,
+      id: item.id || uid(),
+      serial: "",
+      recordCount: Math.max(0, Math.round(Number(item.recordCount) || 0)),
+      netPriceUsd: Number.isFinite(Number(item.netPriceUsd)) ? Math.max(0, Number(item.netPriceUsd)) : stockNetPrice(normalized),
+      estimatedUnitCostUsd: Number.isFinite(Number(item.estimatedUnitCostUsd)) ? Math.max(0, Number(item.estimatedUnitCostUsd)) : stockEstimatedUnitCost(normalized),
+      estimatedTotalCostUsd: Number.isFinite(Number(item.estimatedTotalCostUsd)) ? Math.max(0, Number(item.estimatedTotalCostUsd)) : totalCost,
+      priceVariants: Math.max(0, Math.round(Number(item.priceVariants) || 0)),
+      hasPartialPricing: item.hasPartialPricing === true,
+      source: item.source || "Stock consolidado independiente"
+    };
+  }
+
+  function deriveConsolidatedStockItems(sourceItems) {
+    const groups = new Map();
+    sourceItems.forEach((item) => {
+      const key = normalizedStockProductKey(item.name || item.model || item.brand || item.id);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(item);
+    });
+    return [...groups.entries()].map(([key, members]) => {
+      const activeMembers = members.filter((item) => Number(item.quantity || 0) > 0 || Number(item.boxes || 0) > 0);
+      const representative = activeMembers.find((item) => Number(item.listPriceUsd || 0) > 0) || activeMembers[0] || members[0];
+      const valuationQuantity = members.reduce((sum, item) => sum + stockValuationQuantity(item), 0);
+      const pricedValuationQuantity = members.reduce((sum, item) => sum + (Number(item.listPriceUsd || 0) > 0 ? stockValuationQuantity(item) : 0), 0);
+      const totalCost = members.reduce((sum, item) => sum + stockEstimatedTotalCost(item), 0);
+      const weightedAverage = (selector) => pricedValuationQuantity
+        ? members.reduce((sum, item) => sum + (Number(item.listPriceUsd || 0) > 0 ? selector(item) * stockValuationQuantity(item) : 0), 0) / pricedValuationQuantity
+        : 0;
+      const categories = members.map((item) => consolidatedStockCategory(item.category)).filter(Boolean);
+      const category = categories.sort((a, b) => categories.filter((value) => value === b).length - categories.filter((value) => value === a).length)[0] || "Insumos";
+      const brands = [...new Set(members.map((item) => item.brand.trim()).filter(Boolean))];
+      const models = [...new Set(members.map((item) => item.model.trim()).filter(Boolean))];
+      const priceBases = [...new Set(members.filter((item) => Number(item.listPriceUsd || 0) > 0).map((item) => item.priceBasis))];
+      const priceSignatures = new Set(members.filter((item) => Number(item.listPriceUsd || 0) > 0).map((item) => [item.priceBasis, item.listPriceUsd, item.vatRate, item.marginPercent].join("|")));
+      return normalizeConsolidatedStockItem({
+        id: `consolidated-${key}`,
+        name: representative.name,
+        category,
+        brand: brands.length > 1 ? "Varias marcas" : (brands[0] || ""),
+        model: models.length > 1 ? "Varios modelos" : (models[0] || ""),
+        boxes: members.reduce((sum, item) => sum + Number(item.boxes || 0), 0),
+        quantity: members.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
+        recordCount: members.length,
+        priceBasis: priceBases.length > 1 ? representative.priceBasis : (priceBases[0] || representative.priceBasis),
+        listPriceUsd: weightedAverage((item) => Number(item.listPriceUsd || 0)),
+        netPriceUsd: weightedAverage(stockNetPrice),
+        marginPercent: weightedAverage((item) => Number(item.marginPercent || 0)),
+        estimatedUnitCostUsd: pricedValuationQuantity ? totalCost / pricedValuationQuantity : 0,
+        estimatedTotalCostUsd: totalCost,
+        priceVariants: priceSignatures.size,
+        hasPartialPricing: pricedValuationQuantity < valuationQuantity,
+        source: "Copia inicial del Stock General"
+      });
+    }).filter((item) => item.quantity > 0 || item.boxes > 0);
   }
 
   function normalizeInstalledItem(item) {
@@ -207,6 +290,25 @@
     scheduleCloudSave();
   }
 
+  function syncConsolidatedIntoStockMeta() {
+    stockMeta.consolidatedInventory = {
+      version: CONSOLIDATED_STOCK_VERSION,
+      items: consolidatedItems,
+      meta: consolidatedMeta
+    };
+  }
+
+  function saveConsolidatedStock() {
+    consolidatedMeta.updatedAt = new Date().toISOString();
+    consolidatedMeta.version = CONSOLIDATED_STOCK_VERSION;
+    localStorage.setItem(CONSOLIDATED_STOCK_STORAGE_KEY, JSON.stringify(consolidatedItems));
+    localStorage.setItem(CONSOLIDATED_STOCK_META_KEY, JSON.stringify(consolidatedMeta));
+    syncConsolidatedIntoStockMeta();
+    localStorage.setItem(STOCK_META_KEY, JSON.stringify(stockMeta));
+    renderGroupedStock();
+    scheduleCloudSave();
+  }
+
   function saveInstalled() {
     installedMeta.updatedAt = new Date().toISOString();
     localStorage.setItem(INSTALLED_STORAGE_KEY, JSON.stringify(installedItems));
@@ -223,6 +325,8 @@
     localStorage.setItem(STOCK_STORAGE_KEY, JSON.stringify(stockItems));
     localStorage.setItem(STOCK_META_KEY, JSON.stringify(stockMeta));
     localStorage.setItem(STOCK_SEED_KEY, "loaded");
+    localStorage.setItem(CONSOLIDATED_STOCK_STORAGE_KEY, JSON.stringify(consolidatedItems));
+    localStorage.setItem(CONSOLIDATED_STOCK_META_KEY, JSON.stringify(consolidatedMeta));
     cacheInstalledLocally();
   }
 
@@ -235,9 +339,11 @@
   function clearRestrictedLocalState() {
     items = [];
     stockItems = [];
+    consolidatedItems = [];
     meta = { owner: "", address: "", date: new Date().toISOString().slice(0, 10), notes: "", insuranceExchangeRate: DEFAULT_INSURANCE_EXCHANGE_RATE, updatedAt: null };
     stockMeta = { updatedAt: null, defaultMarginPercent: DEFAULT_STOCK_MARGIN_PERCENT };
-    [STORAGE_KEY, META_KEY, SEED_KEY, STOCK_STORAGE_KEY, STOCK_META_KEY, STOCK_SEED_KEY, STOCK_PRICE_IMPORT_KEY].forEach((key) => localStorage.removeItem(key));
+    consolidatedMeta = { version: CONSOLIDATED_STOCK_VERSION, initializedAt: null, updatedAt: null, source: "" };
+    [STORAGE_KEY, META_KEY, SEED_KEY, STOCK_STORAGE_KEY, STOCK_META_KEY, STOCK_SEED_KEY, STOCK_PRICE_IMPORT_KEY, CONSOLIDATED_STOCK_STORAGE_KEY, CONSOLIDATED_STOCK_META_KEY].forEach((key) => localStorage.removeItem(key));
   }
 
   function setSyncState(state, detail) {
@@ -269,6 +375,7 @@
   async function pushCloudState() {
     if (!cloudReady || cloudLoading || !cloudClient || !activeCloudUser || activeAccess?.scope !== "full") return;
     const updatedAt = new Date().toISOString();
+    syncConsolidatedIntoStockMeta();
     const { error } = await cloudClient.from("app_state").update({
       inventory: items,
       inventory_meta: meta,
@@ -315,6 +422,7 @@
   function stockNetPrice(item) { return Number(item.listPriceUsd || 0) / (1 + Number(item.vatRate || 0) / 100); }
   function stockEstimatedUnitCost(item) { return stockNetPrice(item) / (1 + Number(item.marginPercent || 0) / 100); }
   function stockEstimatedTotalCost(item) { return stockValuationQuantity(item) * stockEstimatedUnitCost(item); }
+  function consolidatedEstimatedTotalCost(item) { return stockValuationQuantity(item) * (Number(item.estimatedUnitCostUsd) || stockEstimatedUnitCost(item)); }
   function stockStatus(item) { return STOCK_STATUSES.includes(item.status) ? item.status : "No disponible"; }
   function stockStatusClass(item) { return stockStatus(item).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("es").replaceAll(" ", "-"); }
   function normalizedStockProductKey(value) { return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toLocaleUpperCase("es"); }
@@ -474,7 +582,8 @@
     $("#inventory-body").innerHTML = visible.map((item) => {
       const issue = itemIssue(item);
       return `
-      <tr>
+      <tr class="${item.verified ? "verified-row" : ""}">
+        <td class="check-column"><input class="verify-checkbox" type="checkbox" data-check-id="${item.id}" ${item.verified ? "checked" : ""} aria-label="Marcar ${escapeHTML(item.name)} como verificado" title="${item.verified ? "Bien verificado" : "Marcar como verificado"}" /></td>
         <td><div class="item-cell">${item.photo ? `<img class="item-thumb" src="${item.photo}" alt="" />` : `<span class="item-thumb">${escapeHTML(item.name.charAt(0).toUpperCase())}</span>`}<div><strong>${escapeHTML(item.name)}</strong><small>${escapeHTML([item.brand, item.model, item.serial].filter(Boolean).join(" · ") || "Sin identificación adicional")}</small>${issue ? `<small class="item-warning">${escapeHTML(issue)}</small>` : ""}</div></div></td>
         <td>${escapeHTML(item.category)}</td><td>${item.location ? escapeHTML(item.location) : `<span class="missing-value">Sin ubicación</span>`}</td><td class="numeric">${Number(item.quantity).toLocaleString("es-PY")}</td>
         <td class="numeric">${Number(item.unitCost) ? formatMoney(item.unitCost) : `<span class="missing-value">Sin valor</span>`}</td><td class="numeric"><strong>${Number(item.unitCost) ? formatMoney(subtotal(item)) : "—"}</strong></td>
@@ -494,6 +603,13 @@
     renderInsuranceSummary();
 
     $$("[data-open-id]").forEach((button) => button.addEventListener("click", () => openDetail(button.dataset.openId)));
+    $$("[data-check-id]").forEach((checkbox) => checkbox.addEventListener("change", () => {
+      const item = items.find((entry) => entry.id === checkbox.dataset.checkId);
+      if (!item) return;
+      item.verified = checkbox.checked;
+      save();
+      showToast(checkbox.checked ? "Bien marcado como verificado" : "Verificación quitada");
+    }));
     $$("[data-decision-id]").forEach((select) => select.addEventListener("change", () => {
       const item = items.find((entry) => entry.id === select.dataset.decisionId);
       if (!item) return;
@@ -602,51 +718,11 @@
   }
 
   function consolidatedStockItems() {
-    const groups = new Map();
-    stockItems.forEach((item) => {
-      const key = normalizedStockProductKey(item.name || item.model || item.brand || item.id);
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(item);
-    });
-    return [...groups.values()].map((members) => {
-      const activeMembers = members.filter((item) => Number(item.quantity || 0) > 0 || Number(item.boxes || 0) > 0);
-      const representative = activeMembers.find((item) => Number(item.listPriceUsd || 0) > 0) || activeMembers[0] || members[0];
-      const valuationQuantity = members.reduce((sum, item) => sum + stockValuationQuantity(item), 0);
-      const pricedValuationQuantity = members.reduce((sum, item) => sum + (Number(item.listPriceUsd || 0) > 0 ? stockValuationQuantity(item) : 0), 0);
-      const totalCost = members.reduce((sum, item) => sum + stockEstimatedTotalCost(item), 0);
-      const weightedAverage = (selector) => pricedValuationQuantity
-        ? members.reduce((sum, item) => sum + (Number(item.listPriceUsd || 0) > 0 ? selector(item) * stockValuationQuantity(item) : 0), 0) / pricedValuationQuantity
-        : 0;
-      const categories = members.map((item) => consolidatedStockCategory(item.category)).filter(Boolean);
-      const category = categories.sort((a, b) => categories.filter((value) => value === b).length - categories.filter((value) => value === a).length)[0] || "ARES";
-      const brands = [...new Set(members.map((item) => item.brand.trim()).filter(Boolean))];
-      const models = [...new Set(members.map((item) => item.model.trim()).filter(Boolean))];
-      const priceBases = [...new Set(members.filter((item) => Number(item.listPriceUsd || 0) > 0).map((item) => item.priceBasis))];
-      const priceSignatures = new Set(members.filter((item) => Number(item.listPriceUsd || 0) > 0).map((item) => [item.priceBasis, item.listPriceUsd, item.vatRate, item.marginPercent].join("|")));
-      return {
-        id: `grouped-${normalizedStockProductKey(representative.name)}`,
-        name: representative.name,
-        category,
-        brand: brands.length > 1 ? "Varias marcas" : (brands[0] || ""),
-        model: models.length > 1 ? "Varios modelos" : (models[0] || ""),
-        boxes: members.reduce((sum, item) => sum + Number(item.boxes || 0), 0),
-        quantity: members.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
-        recordCount: members.length,
-        valuationQuantity,
-        pricedValuationQuantity,
-        priceBasis: priceBases.length > 1 ? "Mixto" : (priceBases[0] || representative.priceBasis),
-        listPriceUsd: weightedAverage((item) => Number(item.listPriceUsd || 0)),
-        netPriceUsd: weightedAverage(stockNetPrice),
-        marginPercent: weightedAverage((item) => Number(item.marginPercent || 0)),
-        estimatedUnitCostUsd: pricedValuationQuantity ? totalCost / pricedValuationQuantity : 0,
-        estimatedTotalCostUsd: totalCost,
-        priceVariants: priceSignatures.size,
-        hasPartialPricing: pricedValuationQuantity < valuationQuantity
-      };
-    }).filter((item) => item.quantity > 0 || item.boxes > 0);
+    return consolidatedItems;
   }
 
   function groupedStockSortValue(item, key) {
+    if (key === "estimatedTotalCostUsd") return consolidatedEstimatedTotalCost(item);
     if (["quantity", "boxes", "listPriceUsd", "netPriceUsd", "marginPercent", "estimatedUnitCostUsd", "estimatedTotalCostUsd"].includes(key)) return Number(item[key]) || 0;
     return String(item[key] || "");
   }
@@ -685,23 +761,20 @@
 
   function renderGroupedStock() {
     const groups = consolidatedStockItems();
-    const totalValue = groups.reduce((sum, item) => sum + item.estimatedTotalCostUsd, 0);
-    const detailedTotalValue = stockItems.reduce((sum, item) => sum + stockEstimatedTotalCost(item), 0);
+    const totalValue = groups.reduce((sum, item) => sum + consolidatedEstimatedTotalCost(item), 0);
     const units = groups.reduce((sum, item) => sum + item.quantity, 0);
     const boxes = groups.reduce((sum, item) => sum + item.boxes, 0);
     const categories = [...new Set(groups.map((item) => item.category))];
     const unpriced = groups.filter((item) => !item.listPriceUsd || item.hasPartialPricing).length;
 
     $("#grouped-stock-summary-value").textContent = formatStockMoney(totalValue);
-    $("#grouped-stock-summary-valuation").textContent = Math.abs(totalValue - detailedTotalValue) < 0.01
-      ? `Coincide con los ${stockItems.length.toLocaleString("es-PY")} registros detallados`
-      : "Revisar diferencias con el stock detallado";
+    $("#grouped-stock-summary-valuation").textContent = "Calculado solo con las cantidades de esta sección";
     $("#grouped-stock-summary-products").textContent = groups.length.toLocaleString("es-PY");
     $("#grouped-stock-summary-lines").textContent = `${categories.length.toLocaleString("es-PY")} ${categories.length === 1 ? "rubro" : "rubros"}`;
     $("#grouped-stock-summary-units").textContent = units.toLocaleString("es-PY");
     $("#grouped-stock-summary-boxes").textContent = `${boxes.toLocaleString("es-PY")} ${boxes === 1 ? "caja" : "cajas"}`;
     $("#grouped-stock-summary-unpriced").textContent = unpriced.toLocaleString("es-PY");
-    $("#grouped-stock-last-update").textContent = stockMeta.updatedAt ? `Actualizado ${dateFormat.format(new Date(stockMeta.updatedAt))}` : "Sin cambios todavía";
+    $("#grouped-stock-last-update").textContent = consolidatedMeta.updatedAt ? `Actualizado ${dateFormat.format(new Date(consolidatedMeta.updatedAt))}` : "Sin cambios todavía";
 
     const selectedCategory = $("#grouped-stock-category-filter").value;
     $("#grouped-stock-category-filter").innerHTML = `<option value="">Todos los rubros</option>${categories.sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" })).map((category) => `<option ${category === selectedCategory ? "selected" : ""}>${escapeHTML(category)}</option>`).join("")}`;
@@ -709,28 +782,41 @@
     const visible = filteredGroupedStockItems(groups);
     renderGroupedStockSortControls();
     $("#grouped-stock-table-count").textContent = visible.length === groups.length
-      ? `${groups.length} ${groups.length === 1 ? "producto agrupado" : "productos agrupados"}`
+      ? `${groups.length} ${groups.length === 1 ? "producto" : "productos"}`
       : `${visible.length} mostrados de ${groups.length}`;
     $("#grouped-stock-body").innerHTML = visible.map((item) => {
       const priceNote = item.hasPartialPricing ? "Precio parcial" : item.priceVariants > 1 ? "Promedio ponderado" : `por ${String(item.priceBasis).toLocaleLowerCase("es")}`;
       return `
       <tr class="stock-row grouped-stock-row">
-        <td><div class="item-cell"><span class="item-thumb stock-thumb">${escapeHTML(item.name.charAt(0).toUpperCase())}</span><div><strong>${escapeHTML(item.name)}</strong><small>${item.recordCount.toLocaleString("es-PY")} ${item.recordCount === 1 ? "registro detallado" : "registros detallados"} agrupados</small></div></div></td>
+        <td><div class="item-cell"><span class="item-thumb stock-thumb">${escapeHTML(item.name.charAt(0).toUpperCase())}</span><div><strong>${escapeHTML(item.name)}</strong><small>Cantidad independiente · sin número de serie</small></div></div></td>
         <td>${escapeHTML(item.category)}</td>
         <td><strong>${escapeHTML(item.brand || "—")}</strong><small class="grouped-model">${escapeHTML(item.model || "Sin modelo")}</small></td>
-        <td class="numeric">${item.boxes.toLocaleString("es-PY")}</td>
-        <td class="numeric"><strong>${item.quantity.toLocaleString("es-PY")}</strong></td>
+        <td class="numeric"><input class="consolidated-quantity-input" type="number" min="0" step="1" value="${item.boxes}" data-consolidated-boxes-id="${escapeHTML(item.id)}" aria-label="Cajas de ${escapeHTML(item.name)}" /></td>
+        <td class="numeric"><input class="consolidated-quantity-input emphasized" type="number" min="0" step="1" value="${item.quantity}" data-consolidated-quantity-id="${escapeHTML(item.id)}" aria-label="Unidades de ${escapeHTML(item.name)}" /></td>
         <td class="numeric">${item.listPriceUsd ? `${formatStockMoney(item.listPriceUsd)}<small class="price-basis">${escapeHTML(priceNote)} · IVA incluido</small>` : "—"}</td>
         <td class="numeric">${item.netPriceUsd ? formatStockMoney(item.netPriceUsd) : "—"}</td>
         <td class="numeric">${item.listPriceUsd ? `<span class="margin-badge">${item.marginPercent.toLocaleString("es-PY", { maximumFractionDigits: 2 })}%</span>` : "—"}</td>
         <td class="numeric">${item.estimatedUnitCostUsd ? `<strong>${formatStockMoney(item.estimatedUnitCostUsd)}</strong><small class="price-basis">${escapeHTML(priceNote)}</small>` : "—"}</td>
-        <td class="numeric"><strong>${item.estimatedTotalCostUsd ? formatStockMoney(item.estimatedTotalCostUsd) : "—"}</strong></td>
+        <td class="numeric"><strong>${consolidatedEstimatedTotalCost(item) ? formatStockMoney(consolidatedEstimatedTotalCost(item)) : "—"}</strong></td>
+        <td><button class="row-action" type="button" data-consolidated-edit-id="${escapeHTML(item.id)}" aria-label="Editar ${escapeHTML(item.name)}">•••</button></td>
       </tr>`;
     }).join("");
 
     $("#grouped-stock-empty-state").hidden = groups.length !== 0;
     $("#grouped-stock-no-results").hidden = groups.length === 0 || visible.length !== 0;
     $("#grouped-stock-body").hidden = visible.length === 0;
+    $$('[data-consolidated-boxes-id]').forEach((input) => {
+      input.addEventListener("blur", () => updateConsolidatedQuantity(input.dataset.consolidatedBoxesId, "boxes", input.value));
+      input.addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); input.blur(); } });
+    });
+    $$('[data-consolidated-quantity-id]').forEach((input) => {
+      input.addEventListener("blur", () => updateConsolidatedQuantity(input.dataset.consolidatedQuantityId, "quantity", input.value));
+      input.addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); input.blur(); } });
+    });
+    $$('[data-consolidated-edit-id]').forEach((button) => button.addEventListener("click", () => {
+      const item = consolidatedItems.find((entry) => entry.id === button.dataset.consolidatedEditId);
+      if (item) openConsolidatedStockForm(item);
+    }));
   }
 
   function installedCompleteness(item) {
@@ -917,6 +1003,50 @@
     $("#stock-form-total-note").textContent = `${quantity.toLocaleString("es-PY")} ${basis === "Caja" ? (quantity === 1 ? "caja" : "cajas") : (quantity === 1 ? "unidad" : "unidades")} × ${formatStockMoney(estimatedUnitCostUsd)}`;
   }
 
+  function updateConsolidatedQuantity(id, field, value) {
+    const item = consolidatedItems.find((entry) => entry.id === id);
+    if (!item || !["boxes", "quantity"].includes(field)) return;
+    item[field] = Math.max(0, Math.round(Number(value) || 0));
+    item.estimatedTotalCostUsd = consolidatedEstimatedTotalCost(item);
+    item.updatedAt = new Date().toISOString();
+    saveConsolidatedStock();
+    showToast("Cantidad del stock consolidado actualizada");
+  }
+
+  function openConsolidatedStockForm(item = null) {
+    consolidatedStockForm.reset();
+    selectedConsolidatedId = item?.id || null;
+    $("#consolidated-stock-dialog-title").textContent = item ? "Editar producto consolidado" : "Añadir producto consolidado";
+    if (item) {
+      Object.entries(item).forEach(([key, value]) => { if (consolidatedStockForm.elements[key]) consolidatedStockForm.elements[key].value = value ?? ""; });
+    } else {
+      consolidatedStockForm.elements.id.value = "";
+      consolidatedStockForm.elements.category.value = "Insumos";
+      consolidatedStockForm.elements.boxes.value = 0;
+      consolidatedStockForm.elements.quantity.value = 0;
+      consolidatedStockForm.elements.priceBasis.value = "Unidad";
+      consolidatedStockForm.elements.listPriceUsd.value = 0;
+      consolidatedStockForm.elements.vatRate.value = 10;
+      consolidatedStockForm.elements.marginPercent.value = stockMeta.defaultMarginPercent;
+    }
+    updateConsolidatedFormTotal();
+    $("#delete-consolidated-stock-item").hidden = !item;
+    consolidatedStockDialog.showModal();
+    setTimeout(() => consolidatedStockForm.elements.name.focus(), 30);
+  }
+
+  function updateConsolidatedFormTotal() {
+    const basis = consolidatedStockForm.elements.priceBasis.value;
+    const quantity = basis === "Caja" ? Number(consolidatedStockForm.elements.boxes.value || 0) : Number(consolidatedStockForm.elements.quantity.value || 0);
+    const listPriceUsd = Math.max(0, Number(consolidatedStockForm.elements.listPriceUsd.value) || 0);
+    const vatRate = Math.max(0, Number(consolidatedStockForm.elements.vatRate.value) || 0);
+    const marginPercent = Math.max(0, Number(consolidatedStockForm.elements.marginPercent.value) || 0);
+    const netPriceUsd = listPriceUsd / (1 + vatRate / 100);
+    const unitCostUsd = netPriceUsd / (1 + marginPercent / 100);
+    $("#consolidated-form-total").textContent = formatStockMoney(quantity * unitCostUsd);
+    $("#consolidated-form-total-note").textContent = `${quantity.toLocaleString("es-PY")} ${basis === "Caja" ? (quantity === 1 ? "caja" : "cajas") : (quantity === 1 ? "unidad" : "unidades")} × ${formatStockMoney(unitCostUsd)}`;
+  }
+
   function openStockDetail(id) {
     const item = stockItems.find((entry) => entry.id === id);
     if (!item) return;
@@ -965,12 +1095,13 @@
     $("#detail-content").innerHTML = `<div class="detail-layout">
       ${item.photo ? `<img class="detail-photo" src="${item.photo}" alt="Foto de ${escapeHTML(item.name)}" />` : `<div class="detail-photo detail-placeholder">${escapeHTML(item.name.charAt(0).toUpperCase())}</div>`}
       <dl class="detail-list">
-        <div><dt>Categoría</dt><dd>${escapeHTML(item.category)}</dd></div><div><dt>Ubicación</dt><dd>${escapeHTML(item.location || "Sin ubicación")}</dd></div>
-        <div><dt>Marca y modelo</dt><dd>${escapeHTML([item.brand, item.model].filter(Boolean).join(" ") || "—")}</dd></div><div><dt>Serie / patrimonio</dt><dd>${escapeHTML(item.serial || "—")}</dd></div>
-        <div><dt>Estado</dt><dd>${escapeHTML(item.condition)}</dd></div><div><dt>Decisión</dt><dd><span class="badge ${decisionClass(item.decision)}">${escapeHTML(item.decision)}</span></dd></div>
-        <div><dt>Adquirido</dt><dd>${formatDate(item.purchaseDate)}</dd></div><div><dt>Fuente</dt><dd>${escapeHTML(item.source || "Registro manual")}</dd></div>
-        <div><dt>Cantidad</dt><dd>${Number(item.quantity)}</dd></div><div><dt>Valor unitario</dt><dd>${Number(item.unitCost) ? formatMoney(item.unitCost) : "Sin valor"}</dd></div>
-        <div><dt>Subtotal</dt><dd><strong>${Number(item.unitCost) ? formatMoney(subtotal(item)) : "—"}</strong></dd></div><div><dt>Comprobante</dt><dd>${escapeHTML(item.receipt || "—")}</dd></div>
+        <div><dt>Categoría</dt><dd>${escapeHTML(item.category)}</dd></div><div><dt>Verificación</dt><dd>${item.verified ? "Verificado" : "Pendiente"}</dd></div>
+        <div><dt>Ubicación</dt><dd>${escapeHTML(item.location || "Sin ubicación")}</dd></div><div><dt>Marca y modelo</dt><dd>${escapeHTML([item.brand, item.model].filter(Boolean).join(" ") || "—")}</dd></div>
+        <div><dt>Serie / patrimonio</dt><dd>${escapeHTML(item.serial || "—")}</dd></div><div><dt>Estado</dt><dd>${escapeHTML(item.condition)}</dd></div>
+        <div><dt>Decisión</dt><dd><span class="badge ${decisionClass(item.decision)}">${escapeHTML(item.decision)}</span></dd></div><div><dt>Adquirido</dt><dd>${formatDate(item.purchaseDate)}</dd></div>
+        <div><dt>Fuente</dt><dd>${escapeHTML(item.source || "Registro manual")}</dd></div><div><dt>Cantidad</dt><dd>${Number(item.quantity)}</dd></div>
+        <div><dt>Valor unitario</dt><dd>${Number(item.unitCost) ? formatMoney(item.unitCost) : "Sin valor"}</dd></div><div><dt>Subtotal</dt><dd><strong>${Number(item.unitCost) ? formatMoney(subtotal(item)) : "—"}</strong></dd></div>
+        <div><dt>Comprobante</dt><dd>${escapeHTML(item.receipt || "—")}</dd></div>
         <div class="full"><dt>Notas</dt><dd>${escapeHTML(item.notes || "—")}</dd></div>
       </dl></div>`;
     detailDialog.showModal();
@@ -1004,8 +1135,8 @@
 
   function csvCell(value) { return `"${String(value ?? "").replaceAll('"', '""')}"`; }
   function exportCSV() {
-    const headers = ["Nombre", "Categoría", "Ubicación", "Marca", "Modelo", "Serie/Patrimonio", "Estado", "Decisión", "Cantidad", "Valor unitario PYG", "Subtotal PYG", "Fecha adquisición", "Comprobante", "Notas", "Fuente"];
-    const rows = items.map((item) => [item.name, item.category, item.location, item.brand, item.model, item.serial, item.condition, item.decision, item.quantity, item.unitCost, subtotal(item), item.purchaseDate, item.receipt, item.notes, item.source]);
+    const headers = ["Verificado", "Nombre", "Categoría", "Ubicación", "Marca", "Modelo", "Serie/Patrimonio", "Estado", "Decisión", "Cantidad", "Valor unitario PYG", "Subtotal PYG", "Fecha adquisición", "Comprobante", "Notas", "Fuente"];
+    const rows = items.map((item) => [item.verified ? "Sí" : "No", item.name, item.category, item.location, item.brand, item.model, item.serial, item.condition, item.decision, item.quantity, item.unitCost, subtotal(item), item.purchaseDate, item.receipt, item.notes, item.source]);
     download(`inventario-oficina-${new Date().toISOString().slice(0, 10)}.csv`, `\ufeff${[headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n")}`, "text/csv;charset=utf-8");
     showToast("Planilla CSV descargada");
   }
@@ -1048,14 +1179,13 @@
 
     const query = $("#grouped-stock-search-input").value.trim();
     const category = $("#grouped-stock-category-filter").value;
-    const totalValue = visible.reduce((sum, item) => sum + Number(item.estimatedTotalCostUsd || 0), 0);
-    const headers = ["Producto o equipo", "Rubro", "Marca", "Modelo", "Registros detallados agrupados", "Cajas", "Unidades", "Precio aplicado por", "Precio de lista USD (IVA incluido)", "Precio neto USD", "Ganancia %", "Costo unitario estimado USD", "Costo total estimado USD", "Observación del precio", "Criterio de valorización"];
+    const totalValue = visible.reduce((sum, item) => sum + consolidatedEstimatedTotalCost(item), 0);
+    const headers = ["Producto o equipo", "Rubro", "Marca", "Modelo", "Cajas independientes", "Unidades independientes", "Precio aplicado por", "Precio de lista USD (IVA incluido)", "Precio neto USD", "Ganancia %", "Costo unitario estimado USD", "Costo total estimado USD", "Fuente", "Criterio de valorización"];
     const rows = visible.map((item) => [
       item.name,
       item.category,
       item.brand,
       item.model,
-      item.recordCount,
       item.boxes,
       item.quantity,
       item.priceBasis,
@@ -1063,8 +1193,8 @@
       item.netPriceUsd || null,
       item.listPriceUsd ? item.marginPercent / 100 : null,
       item.estimatedUnitCostUsd || null,
-      item.estimatedTotalCostUsd || null,
-      item.hasPartialPricing ? "Precio parcial" : item.priceVariants > 1 ? "Promedio ponderado" : "Precio uniforme",
+      consolidatedEstimatedTotalCost(item) || null,
+      item.source,
       STOCK_VALUATION_CRITERION
     ]);
     const exportRows = [
@@ -1082,12 +1212,12 @@
     const headerRow = 7;
     const firstDataRow = headerRow + 1;
     const lastDataRow = firstDataRow + rows.length - 1;
-    const currencyColumns = [8, 9, 11, 12];
+    const currencyColumns = [7, 8, 10, 11];
 
     worksheet["!cols"] = [
       { wch: 34 }, { wch: 16 }, { wch: 18 }, { wch: 22 }, { wch: 14 },
-      { wch: 10 }, { wch: 11 }, { wch: 18 }, { wch: 20 }, { wch: 18 },
-      { wch: 12 }, { wch: 22 }, { wch: 22 }, { wch: 21 }, { wch: 42 }
+      { wch: 14 }, { wch: 18 }, { wch: 20 }, { wch: 18 }, { wch: 12 },
+      { wch: 22 }, { wch: 22 }, { wch: 30 }, { wch: 42 }
     ];
     worksheet["!autofilter"] = {
       ref: window.XLSX.utils.encode_range({ s: { r: headerRow, c: 0 }, e: { r: lastDataRow, c: headers.length - 1 } })
@@ -1099,7 +1229,7 @@
         const cell = worksheet[window.XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex })];
         if (cell) cell.z = '"US$" #,##0.00';
       });
-      const marginCell = worksheet[window.XLSX.utils.encode_cell({ r: rowIndex, c: 10 })];
+      const marginCell = worksheet[window.XLSX.utils.encode_cell({ r: rowIndex, c: 9 })];
       if (marginCell) marginCell.z = "0.00%";
     }
 
@@ -1135,14 +1265,14 @@
     const viewCopy = {
       inventory: { eyebrow: "GESTIÓN PATRIMONIAL", title: "Inventario de oficina", add: "Añadir bien" },
       stock: { eyebrow: "CONTROL DE EXISTENCIAS", title: "Stock General", add: "Añadir registro" },
-      "stock-grouped": { eyebrow: "RESUMEN POR PRODUCTO", title: "Stock por cantidad", add: "" },
+      "stock-grouped": { eyebrow: "EXISTENCIAS INDEPENDIENTES", title: "Stock consolidado", add: "Añadir producto" },
       installed: { eyebrow: "TRAZABILIDAD DE EQUIPOS", title: "Base instalada", add: "Añadir equipo" },
       report: { eyebrow: "VALORIZACIÓN PARA EL SEGURO", title: "Informe del seguro", add: "" }
     }[view] || {};
     $("#page-eyebrow").textContent = viewCopy.eyebrow || "ARES ACTIVOS";
     $("#page-title").textContent = viewCopy.title || "ARES Activos";
     $("#add-button-label").textContent = viewCopy.add || "Añadir";
-    $("#add-button").style.display = view === "report" || view === "stock-grouped" ? "none" : "inline-flex";
+    $("#add-button").style.display = view === "report" ? "none" : "inline-flex";
   }
 
   form.addEventListener("submit", (event) => {
@@ -1152,7 +1282,7 @@
     const item = {
       id: data.id || uid(), name: data.name.trim(), category: data.category, location: data.location.trim(), brand: data.brand.trim(), model: data.model.trim(), serial: data.serial.trim(),
       condition: data.condition, decision: data.decision, quantity: Math.max(1, Math.round(Number(data.quantity) || 1)), unitCost: Math.max(0, Math.round(Number(data.unitCost) || 0)), purchaseDate: data.purchaseDate,
-      receipt: data.receipt.trim(), notes: data.notes.trim(), source: existing?.source || "Registro manual", photo: pendingPhoto, updatedAt: new Date().toISOString()
+      receipt: data.receipt.trim(), notes: data.notes.trim(), source: existing?.source || "Registro manual", photo: pendingPhoto, verified: existing?.verified ?? false, updatedAt: new Date().toISOString()
     };
     const index = items.findIndex((entry) => entry.id === item.id);
     if (index >= 0) items[index] = item; else items.unshift(item);
@@ -1175,6 +1305,39 @@
     const index = stockItems.findIndex((entry) => entry.id === item.id);
     if (index >= 0) stockItems[index] = item; else stockItems.unshift(item);
     saveStock(); stockDialog.close(); showToast(index >= 0 ? "Producto actualizado" : "Producto añadido al stock");
+  });
+
+  consolidatedStockForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const data = Object.fromEntries(new FormData(consolidatedStockForm));
+    const existing = consolidatedItems.find((entry) => entry.id === data.id);
+    const normalized = normalizeConsolidatedStockItem({
+      ...existing,
+      id: data.id || uid(),
+      name: data.name.trim(),
+      category: data.category,
+      brand: data.brand.trim(),
+      model: data.model.trim(),
+      boxes: Math.max(0, Math.round(Number(data.boxes) || 0)),
+      quantity: Math.max(0, Math.round(Number(data.quantity) || 0)),
+      priceBasis: data.priceBasis,
+      listPriceUsd: Math.max(0, Number(data.listPriceUsd) || 0),
+      vatRate: Number(data.vatRate),
+      marginPercent: Math.min(300, Math.max(0, Number(data.marginPercent) || 0)),
+      estimatedUnitCostUsd: 0,
+      estimatedTotalCostUsd: 0,
+      hasPartialPricing: false,
+      source: existing?.source || "Registro manual del stock consolidado",
+      updatedAt: new Date().toISOString()
+    });
+    normalized.netPriceUsd = stockNetPrice(normalized);
+    normalized.estimatedUnitCostUsd = stockEstimatedUnitCost(normalized);
+    normalized.estimatedTotalCostUsd = consolidatedEstimatedTotalCost(normalized);
+    const index = consolidatedItems.findIndex((entry) => entry.id === normalized.id);
+    if (index >= 0) consolidatedItems[index] = normalized; else consolidatedItems.unshift(normalized);
+    saveConsolidatedStock();
+    consolidatedStockDialog.close();
+    showToast(index >= 0 ? "Producto consolidado actualizado" : "Producto añadido al stock consolidado");
   });
 
   installedForm.addEventListener("submit", (event) => {
@@ -1211,6 +1374,15 @@
   });
   $("#edit-stock-item").addEventListener("click", () => { const item = stockItems.find((entry) => entry.id === selectedStockId); stockDetailDialog.close(); if (item) openStockForm(item); });
 
+  $("#delete-consolidated-stock-item").addEventListener("click", () => {
+    const item = consolidatedItems.find((entry) => entry.id === selectedConsolidatedId); if (!item) return;
+    if (!confirm(`¿Eliminar “${item.name}” del stock consolidado?`)) return;
+    consolidatedItems = consolidatedItems.filter((entry) => entry.id !== selectedConsolidatedId);
+    saveConsolidatedStock();
+    consolidatedStockDialog.close();
+    showToast("Producto eliminado del stock consolidado");
+  });
+
   $("#delete-installed-item").addEventListener("click", () => {
     const item = installedItems.find((entry) => entry.id === selectedInstalledId); if (!item) return;
     if (!confirm(`¿Eliminar “${item.model}” de la base instalada?`)) return;
@@ -1218,7 +1390,7 @@
   });
   $("#edit-installed-item").addEventListener("click", () => { const item = installedItems.find((entry) => entry.id === selectedInstalledId); installedDetailDialog.close(); if (item) openInstalledForm(item); });
 
-  $("#add-button").addEventListener("click", () => currentView === "stock" ? openStockForm() : currentView === "installed" ? openInstalledForm() : openForm());
+  $("#add-button").addEventListener("click", () => currentView === "stock" ? openStockForm() : currentView === "stock-grouped" ? openConsolidatedStockForm() : currentView === "installed" ? openInstalledForm() : openForm());
   $("#empty-add-button").addEventListener("click", () => openForm());
   $("#stock-empty-add-button").addEventListener("click", () => openStockForm());
   $("#installed-empty-add-button").addEventListener("click", () => openInstalledForm());
@@ -1226,6 +1398,7 @@
   $$("[data-detail-close]").forEach((button) => button.addEventListener("click", () => detailDialog.close()));
   $$("[data-stock-close]").forEach((button) => button.addEventListener("click", () => stockDialog.close()));
   $$("[data-stock-detail-close]").forEach((button) => button.addEventListener("click", () => stockDetailDialog.close()));
+  $$("[data-consolidated-stock-close]").forEach((button) => button.addEventListener("click", () => consolidatedStockDialog.close()));
   $$("[data-installed-close]").forEach((button) => button.addEventListener("click", () => installedDialog.close()));
   $$("[data-installed-detail-close]").forEach((button) => button.addEventListener("click", () => installedDetailDialog.close()));
   $$("[data-backup-close]").forEach((button) => button.addEventListener("click", () => backupDialog.close()));
@@ -1242,6 +1415,7 @@
   $("#installed-manufacturer-filter").addEventListener("change", renderInstalled);
   $("#installed-completeness-filter").addEventListener("change", renderInstalled);
   ["boxes", "quantity", "priceBasis", "listPriceUsd", "vatRate", "marginPercent"].forEach((name) => stockForm.elements[name].addEventListener("input", updateStockFormTotal));
+  ["boxes", "quantity", "priceBasis", "listPriceUsd", "vatRate", "marginPercent"].forEach((name) => consolidatedStockForm.elements[name].addEventListener("input", updateConsolidatedFormTotal));
   $("#stock-default-margin").addEventListener("change", (event) => {
     const value = Number(event.target.value);
     stockMeta.defaultMarginPercent = Number.isFinite(value) ? Math.min(300, Math.max(0, value)) : DEFAULT_STOCK_MARGIN_PERCENT;
@@ -1288,22 +1462,24 @@
   $("#installed-export-csv").addEventListener("click", exportInstalledCSV);
   $("#backup-button").addEventListener("click", () => backupDialog.showModal());
   $("#print-button").addEventListener("click", () => window.print());
-  $("#export-json").addEventListener("click", () => { download(`respaldo-ares-activos-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify({ version: 7, exportedAt: new Date().toISOString(), items, meta, stockItems, stockMeta, installedItems, installedMeta }, null, 2), "application/json"); showToast("Respaldo descargado"); });
+  $("#export-json").addEventListener("click", () => { download(`respaldo-ares-activos-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify({ version: 8, exportedAt: new Date().toISOString(), items, meta, stockItems, stockMeta, consolidatedItems, consolidatedMeta, installedItems, installedMeta }, null, 2), "application/json"); showToast("Respaldo descargado"); });
   $("#import-json").addEventListener("change", async (event) => {
     const file = event.target.files[0]; if (!file) return;
     try {
       const data = JSON.parse(await file.text());
-      if (!Array.isArray(data.items) && !Array.isArray(data.stockItems) && !Array.isArray(data.installedItems)) throw new Error("Formato inválido");
+      if (!Array.isArray(data.items) && !Array.isArray(data.stockItems) && !Array.isArray(data.consolidatedItems) && !Array.isArray(data.installedItems)) throw new Error("Formato inválido");
       const inventoryCount = Array.isArray(data.items) ? data.items.length : items.length;
       const stockCount = Array.isArray(data.stockItems) ? data.stockItems.length : stockItems.length;
+      const consolidatedCount = Array.isArray(data.consolidatedItems) ? data.consolidatedItems.length : consolidatedItems.length;
       const installedCount = Array.isArray(data.installedItems) ? data.installedItems.length : installedItems.length;
-      if (!confirm(`El respaldo contiene ${inventoryCount} bienes, ${stockCount} productos de stock y ${installedCount} equipos instalados. ¿Reemplazar los datos actuales?`)) return;
+      if (!confirm(`El respaldo contiene ${inventoryCount} bienes, ${stockCount} registros por serie, ${consolidatedCount} productos consolidados y ${installedCount} equipos instalados. ¿Reemplazar los datos actuales?`)) return;
       if (Array.isArray(data.items)) items = data.items.map(normalizeItem);
       if (Array.isArray(data.stockItems)) stockItems = data.stockItems.map(normalizeStockItem);
+      if (Array.isArray(data.consolidatedItems)) consolidatedItems = data.consolidatedItems.map(normalizeConsolidatedStockItem);
       if (Array.isArray(data.installedItems)) installedItems = data.installedItems.map(normalizeInstalledItem);
-      meta = { ...meta, ...(data.meta || {}) }; stockMeta = { ...stockMeta, ...(data.stockMeta || {}) }; installedMeta = { ...installedMeta, ...(data.installedMeta || {}) };
+      meta = { ...meta, ...(data.meta || {}) }; stockMeta = { ...stockMeta, ...(data.stockMeta || {}) }; consolidatedMeta = { ...consolidatedMeta, ...(data.consolidatedMeta || {}) }; installedMeta = { ...installedMeta, ...(data.installedMeta || {}) };
       stockMeta.defaultMarginPercent = Number.isFinite(Number(stockMeta.defaultMarginPercent)) ? Math.min(300, Math.max(0, Number(stockMeta.defaultMarginPercent))) : DEFAULT_STOCK_MARGIN_PERCENT;
-      save(); saveStock(); saveInstalled(); hydrateMeta(); backupDialog.close(); showToast("Respaldo restaurado");
+      save(); saveStock(); saveConsolidatedStock(); saveInstalled(); hydrateMeta(); backupDialog.close(); showToast("Respaldo restaurado");
     } catch { showToast("El archivo de respaldo no es válido"); }
     event.target.value = "";
   });
@@ -1349,6 +1525,7 @@
 
   async function loadCloudState() {
     cloudLoading = true;
+    let consolidatedNeedsCloudSave = false;
     setSyncState("syncing", "Descargando la información más reciente.");
     const installedRequest = cloudClient.from("installed_base_state").select("installed_base, installed_meta, updated_at").eq("id", "main").single();
     const appRequest = activeAccess?.scope === "full"
@@ -1364,6 +1541,22 @@
       meta = { ...meta, ...(appData.inventory_meta || {}) };
       stockItems = (Array.isArray(appData.stock) ? appData.stock : []).map(normalizeStockItem);
       stockMeta = { ...stockMeta, ...(appData.stock_meta || {}) };
+      const cloudConsolidated = appData.stock_meta?.consolidatedInventory;
+      if (Array.isArray(cloudConsolidated?.items)) {
+        consolidatedItems = cloudConsolidated.items.map(normalizeConsolidatedStockItem);
+        consolidatedMeta = { ...consolidatedMeta, ...(cloudConsolidated.meta || {}), version: CONSOLIDATED_STOCK_VERSION };
+      } else if (!Array.isArray(storedConsolidatedItems)) {
+        consolidatedItems = deriveConsolidatedStockItems(stockItems);
+        consolidatedMeta = {
+          version: CONSOLIDATED_STOCK_VERSION,
+          initializedAt: new Date().toISOString(),
+          updatedAt: appData.updated_at || new Date().toISOString(),
+          source: "Copia inicial del Stock General"
+        };
+        consolidatedNeedsCloudSave = true;
+      } else {
+        consolidatedNeedsCloudSave = true;
+      }
       migrateStockRubrics();
     } else {
       clearRestrictedLocalState();
@@ -1381,8 +1574,8 @@
     cloudLoading = false;
     cloudReady = true;
     const updatedAt = activeAccess.scope === "full" && appData?.updated_at > installedData.updated_at ? appData.updated_at : installedData.updated_at;
-    if (activeAccess.scope === "full" && stockMeta.rubricVersion === STOCK_RUBRIC_VERSION && appData?.stock_meta?.rubricVersion !== STOCK_RUBRIC_VERSION) {
-      setSyncState("syncing", "Guardando la nueva clasificación por rubros.");
+    if (activeAccess.scope === "full" && (consolidatedNeedsCloudSave || (stockMeta.rubricVersion === STOCK_RUBRIC_VERSION && appData?.stock_meta?.rubricVersion !== STOCK_RUBRIC_VERSION))) {
+      setSyncState("syncing", consolidatedNeedsCloudSave ? "Guardando el stock consolidado independiente." : "Guardando la nueva clasificación por rubros.");
       await pushCloudState();
     } else {
       setSyncState("ready", `Actualizado: ${new Date(updatedAt).toLocaleString("es-PY", { dateStyle: "short", timeStyle: "short" })}`);
@@ -1453,7 +1646,7 @@
       {
         name: "add_office_inventory_item", title: "Añadir bien de oficina", description: "Añade un bien al inventario de oficina y actualiza los totales visibles.",
         inputSchema: { type: "object", properties: { name: { type: "string" }, category: { type: "string" }, location: { type: "string" }, quantity: { type: "integer", minimum: 1 }, unitCost: { type: "integer", minimum: 0 }, condition: { type: "string" } }, required: ["name", "category", "location", "quantity", "unitCost"], additionalProperties: false }, annotations: { readOnlyHint: false, untrustedContentHint: false },
-        execute: (input) => { if (!input?.name || !input?.category || !input?.location || !Number.isInteger(input.quantity) || input.quantity < 1 || !Number.isInteger(input.unitCost) || input.unitCost < 0) throw new Error("Datos inválidos"); const item = { id: uid(), name: input.name.trim(), category: input.category.trim(), location: input.location.trim(), brand: "", model: "", serial: "", condition: input.condition || "Sin verificar", decision: "Incluir", quantity: input.quantity, unitCost: input.unitCost, purchaseDate: "", receipt: "", notes: "", source: "Registro manual", photo: "", updatedAt: new Date().toISOString() }; items.unshift(item); save(); return { id: item.id, name: item.name, subtotalPYG: subtotal(item) }; }
+        execute: (input) => { if (!input?.name || !input?.category || !input?.location || !Number.isInteger(input.quantity) || input.quantity < 1 || !Number.isInteger(input.unitCost) || input.unitCost < 0) throw new Error("Datos inválidos"); const item = { id: uid(), name: input.name.trim(), category: input.category.trim(), location: input.location.trim(), brand: "", model: "", serial: "", condition: input.condition || "Sin verificar", decision: "Incluir", quantity: input.quantity, unitCost: input.unitCost, purchaseDate: "", receipt: "", notes: "", source: "Registro manual", photo: "", verified: false, updatedAt: new Date().toISOString() }; items.unshift(item); save(); return { id: item.id, name: item.name, subtotalPYG: subtotal(item) }; }
       },
       {
         name: "list_office_stock", title: "Consultar stock general", description: "Devuelve los equipos y productos del stock general de ARES, agrupados por rubro y estado.",

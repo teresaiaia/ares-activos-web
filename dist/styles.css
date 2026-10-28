@@ -143,6 +143,35 @@ th { padding: 12px 16px; background: #f7f8fb; color: #69758a; font-size: .7rem; 
 .sort-button small { display: inline-block; color: #979ca3; font-size: .58rem; font-weight: 700; letter-spacing: 0; text-transform: none; }
 .sortable-th.numeric .sort-button { justify-content: flex-end; }
 td { padding: 14px 16px; border-top: 1px solid #edf0f4; color: #465166; font-size: .84rem; vertical-align: middle; }
+.check-column { width: 54px; min-width: 54px; padding-left: 17px; padding-right: 7px; text-align: center; }
+.check-column > span:not(.sr-only) { color: #8c98aa; font-size: .9rem; }
+.verify-checkbox {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  appearance: none;
+  display: inline-grid;
+  place-content: center;
+  border: 2px solid #b7c0cf;
+  border-radius: 5px;
+  background: #fff;
+  cursor: pointer;
+  transition: .15s ease;
+}
+.verify-checkbox::before {
+  content: "";
+  width: 10px;
+  height: 6px;
+  border-left: 2px solid #fff;
+  border-bottom: 2px solid #fff;
+  transform: rotate(-45deg) scale(0);
+  transform-origin: center;
+  transition: transform .12s ease;
+}
+.verify-checkbox:checked { border-color: var(--blue); background: var(--blue); }
+.verify-checkbox:checked::before { transform: rotate(-45deg) scale(1); }
+.verify-checkbox:focus-visible { outline: 3px solid rgba(36,89,211,.22); outline-offset: 2px; }
+.verified-row { background: #fbfcff; }
 tbody tr { transition: background .14s; }
 tbody tr:hover { background: #fafbfe; }
 .numeric { text-align: right; }
@@ -171,13 +200,25 @@ tbody tr:hover { background: #fafbfe; }
 .stock-row.a-prestamo td, .stock-row.no-disponible td { background: #fafafa; }
 .stock-row.no-disponible td { color: #777b80; }
 .stock-table-wrap table { min-width: 1910px; }
-.grouped-stock-table-wrap table { min-width: 1460px; }
+.grouped-stock-table-wrap table { min-width: 1540px; }
 .grouped-stock-note { padding-left: 22px; border-left: 1px solid #d8dbde; }
 .grouped-stock-note strong, .grouped-stock-note small, .grouped-model { display: block; }
 .grouped-stock-note strong { color: #3f444a; font-size: .82rem; text-transform: uppercase; letter-spacing: .04em; }
 .grouped-stock-note small { max-width: 250px; margin-top: 5px; color: #7d8288; font-size: .73rem; line-height: 1.4; }
 .grouped-model { margin-top: 3px; color: #8a8e93; font-size: .7rem; }
 .grouped-stock-row .item-cell { min-width: 245px; }
+.consolidated-quantity-input {
+  width: 76px;
+  padding: 8px 9px;
+  border: 1px solid #cdd1d6;
+  border-radius: 8px;
+  background: #fff;
+  color: #4a4f55;
+  font: inherit;
+  text-align: right;
+}
+.consolidated-quantity-input.emphasized { border-color: #8b9096; color: #24282d; font-weight: 800; }
+.consolidated-quantity-input:focus { outline: 3px solid rgba(85,91,98,.16); border-color: #686e75; }
 .price-basis { display: block; margin-top: 3px; color: #8a8e93; font-size: .66rem; font-weight: 600; white-space: nowrap; }
 .margin-badge { display: inline-flex; min-width: 48px; justify-content: center; padding: 4px 8px; border-radius: 999px; background: #eceeef; color: #484d53; font-size: .72rem; font-weight: 800; }
 .stock-view-theme .stock-empty-illustration { background: #e4e6e8; color: #50555b; }

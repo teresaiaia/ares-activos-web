@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#12213f" />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%2312213f'/%3E%3Cpath d='M17 46 29 17h7l12 29h-8l-2-6H26l-2 6Zm12-13h6l-3-9Z' fill='%236fe0c1'/%3E%3C/svg%3E" />
     <title>Gestión de activos · ARES Activos</title>
-    <link rel="stylesheet" href="styles.css?v=16" />
+    <link rel="stylesheet" href="styles.css?v=17" />
   </head>
   <body class="cloud-loading">
     <section id="auth-screen" class="auth-screen" aria-labelledby="auth-title">
@@ -125,6 +125,7 @@
               <table>
                 <thead>
                   <tr>
+                    <th class="check-column" title="Verificación"><span aria-hidden="true">✓</span><span class="sr-only">Verificado</span></th>
                     <th class="sortable-th"><button class="sort-button" type="button" data-sort-key="name" data-sort-label="bien">Bien <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
                     <th class="sortable-th"><button class="sort-button" type="button" data-sort-key="category" data-sort-label="categoría">Categoría <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
                     <th class="sortable-th"><button class="sort-button" type="button" data-sort-key="location" data-sort-label="ubicación">Ubicación <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
@@ -282,11 +283,11 @@
             <div>
               <p class="eyebrow">RESUMEN POR PRODUCTO</p>
               <h2 id="grouped-stock-title">Stock por cantidad, sin números de serie</h2>
-              <p>Esta vista agrupa los registros con el mismo producto, suma cajas y unidades, y conserva exactamente el valor calculado en el Stock General. La planilla detallada por serie no se modifica.</p>
+              <p>Esta sección tiene cantidades propias. Podés ajustar cajas y unidades aquí sin modificar ni sincronizar los registros con números de serie del Stock General.</p>
             </div>
             <div class="grouped-stock-note">
-              <strong>Vista automática</strong>
-              <small>Los cambios se realizan en Stock General y aparecen aquí agrupados.</small>
+              <strong>Inventario independiente</strong>
+              <small>Los cambios se guardan en esta sección y no alteran los números de serie.</small>
             </div>
           </section>
 
@@ -294,7 +295,7 @@
             <div class="panel-heading">
               <div>
                 <h2>Existencias consolidadas</h2>
-                <p>Una sola fila por producto, con cantidad y valorización total para el seguro.</p>
+                <p>Una sola fila por producto, con existencias editables y persistentes.</p>
               </div>
               <div class="table-actions">
                 <label class="search">
@@ -322,14 +323,15 @@
                     <th class="numeric sortable-th"><button class="sort-button" type="button" data-grouped-stock-sort-key="marginPercent" data-sort-label="ganancia">Ganancia % <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
                     <th class="numeric sortable-th"><button class="sort-button" type="button" data-grouped-stock-sort-key="estimatedUnitCostUsd" data-sort-label="costo unitario estimado">Costo unit. US$ <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
                     <th class="numeric sortable-th"><button class="sort-button" type="button" data-grouped-stock-sort-key="estimatedTotalCostUsd" data-sort-label="costo total estimado">Costo total US$ <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
+                    <th><span class="sr-only">Acciones</span></th>
                   </tr>
                 </thead>
                 <tbody id="grouped-stock-body"></tbody>
               </table>
               <div id="grouped-stock-empty-state" class="empty-state">
                 <div class="empty-illustration stock-empty-illustration" aria-hidden="true">▦</div>
-                <h3>No hay existencias para consolidar</h3>
-                <p>Los productos con unidades o cajas aparecerán automáticamente desde Stock General.</p>
+                <h3>No hay productos en el stock consolidado</h3>
+                <p>Añadí un producto para comenzar a controlar sus cantidades de forma independiente.</p>
               </div>
               <div id="grouped-stock-no-results" class="empty-state compact" hidden>
                 <h3>No hay coincidencias</h3>
@@ -337,7 +339,7 @@
               </div>
             </div>
             <div class="panel-footer">
-              <span id="grouped-stock-table-count">0 productos agrupados</span>
+              <span id="grouped-stock-table-count">0 productos</span>
               <span id="grouped-stock-last-update">Sin cambios todavía</span>
             </div>
           </section>
@@ -613,6 +615,41 @@
       </div>
     </dialog>
 
+    <dialog id="consolidated-stock-dialog" class="modal stock-modal">
+      <form id="consolidated-stock-form" method="dialog">
+        <div class="modal-header">
+          <div><p class="eyebrow">STOCK CONSOLIDADO INDEPENDIENTE</p><h2 id="consolidated-stock-dialog-title">Editar producto consolidado</h2></div>
+          <button class="close-button" type="button" data-consolidated-stock-close aria-label="Cerrar">×</button>
+        </div>
+        <div class="form-grid">
+          <label class="span-2">Nombre del producto o equipo <span>*</span><input name="name" required placeholder="Ej.: Cartucho MPT 4.5" /></label>
+          <label>Rubro <span>*</span>
+            <select name="category" required>
+              <option>Equipos</option><option>Cartuchos</option><option>Insumos</option><option>Repuestos</option><option>Cosmética</option>
+            </select>
+          </label>
+          <label>Marca <input name="brand" placeholder="Marca" /></label>
+          <label>Modelo <input name="model" placeholder="Modelo" /></label>
+          <label>Cajas propias <span>*</span><input name="boxes" type="number" min="0" step="1" value="0" required /></label>
+          <label>Unidades propias <span>*</span><input name="quantity" type="number" min="0" step="1" value="0" required /></label>
+          <label>Precio aplicado por <span>*</span><select name="priceBasis" required><option>Unidad</option><option>Caja</option></select></label>
+          <label>Precio de lista (US$, IVA incluido) <span>*</span><input name="listPriceUsd" type="number" min="0" step="0.01" value="0" required /></label>
+          <label>IVA incluido <span>*</span><select name="vatRate" required><option value="10">10%</option><option value="5">5%</option><option value="0">Exento</option></select></label>
+          <label>Ganancia aplicada <span>*</span><input name="marginPercent" type="number" min="0" max="300" step="1" value="40" required /></label>
+          <div class="valuation-preview valuation-breakdown span-2" aria-live="polite">
+            <div class="valuation-total"><span>Costo total estimado</span><strong id="consolidated-form-total">US$ 0,00</strong><small id="consolidated-form-total-note">0 unidades × US$ 0,00</small></div>
+            <p>Las cantidades de este formulario pertenecen solo al Stock consolidado.</p>
+          </div>
+        </div>
+        <input type="hidden" name="id" />
+        <div class="modal-footer">
+          <button class="button danger" type="button" id="delete-consolidated-stock-item">Eliminar</button>
+          <button class="button ghost" type="button" data-consolidated-stock-close>Cancelar</button>
+          <button class="button primary" type="submit">Guardar producto</button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog id="installed-dialog" class="modal installed-modal">
       <form id="installed-form" method="dialog">
         <div class="modal-header">
@@ -665,6 +702,6 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.102.0/dist/umd/supabase.min.js"></script>
     <script src="vendor/xlsx.full.min.js?v=0.20.3"></script>
     <script src="cloud-config.js?v=1"></script>
-    <script src="app.js?v=16"></script>
+    <script src="app.js?v=17"></script>
   </body>
 </html>
