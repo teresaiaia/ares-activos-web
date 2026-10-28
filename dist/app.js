@@ -8,7 +8,7 @@
   const STOCK_PRICE_IMPORT_KEY = "ares-general-stock-price-import-v1";
   const CONSOLIDATED_STOCK_STORAGE_KEY = "ares-consolidated-stock-v1";
   const CONSOLIDATED_STOCK_META_KEY = "ares-consolidated-stock-meta-v1";
-  const CONSOLIDATED_STOCK_VERSION = 2;
+  const CONSOLIDATED_STOCK_VERSION = 3;
   const INSTALLED_STORAGE_KEY = "ares-installed-base-v1";
   const INSTALLED_META_KEY = "ares-installed-base-meta-v1";
   const INSTALLED_SEED_KEY = "ares-installed-base-seed-2026-v1";
@@ -182,8 +182,8 @@
   }
 
   function normalizeConsolidatedStockItem(item) {
-    const normalized = normalizeStockItem({ ...item, serial: "", status: "Disponible" });
-    const valuationQuantity = normalized.priceBasis === "Caja" ? normalized.boxes : normalized.quantity;
+    const normalized = normalizeStockItem({ ...item, serial: "", status: "Disponible", boxes: 0, priceBasis: "Unidad" });
+    const valuationQuantity = normalized.quantity;
     const totalCost = valuationQuantity * stockEstimatedUnitCost(normalized);
     return {
       ...normalized,
@@ -207,19 +207,18 @@
       groups.get(key).push(item);
     });
     return [...groups.entries()].map(([key, members]) => {
-      const activeMembers = members.filter((item) => Number(item.quantity || 0) > 0 || Number(item.boxes || 0) > 0);
+      const activeMembers = members.filter((item) => Number(item.quantity || 0) > 0);
       const representative = activeMembers.find((item) => Number(item.listPriceUsd || 0) > 0) || activeMembers[0] || members[0];
-      const valuationQuantity = members.reduce((sum, item) => sum + stockValuationQuantity(item), 0);
-      const pricedValuationQuantity = members.reduce((sum, item) => sum + (Number(item.listPriceUsd || 0) > 0 ? stockValuationQuantity(item) : 0), 0);
-      const totalCost = members.reduce((sum, item) => sum + stockEstimatedTotalCost(item), 0);
+      const valuationQuantity = members.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+      const pricedValuationQuantity = members.reduce((sum, item) => sum + (Number(item.listPriceUsd || 0) > 0 ? Number(item.quantity || 0) : 0), 0);
+      const totalCost = members.reduce((sum, item) => sum + (Number(item.quantity || 0) * stockEstimatedUnitCost(item)), 0);
       const weightedAverage = (selector) => pricedValuationQuantity
-        ? members.reduce((sum, item) => sum + (Number(item.listPriceUsd || 0) > 0 ? selector(item) * stockValuationQuantity(item) : 0), 0) / pricedValuationQuantity
+        ? members.reduce((sum, item) => sum + (Number(item.listPriceUsd || 0) > 0 ? selector(item) * Number(item.quantity || 0) : 0), 0) / pricedValuationQuantity
         : 0;
       const categories = members.map((item) => consolidatedStockCategory(item.category)).filter(Boolean);
       const category = categories.sort((a, b) => categories.filter((value) => value === b).length - categories.filter((value) => value === a).length)[0] || "Insumos";
       const brands = [...new Set(members.map((item) => item.brand.trim()).filter(Boolean))];
       const models = [...new Set(members.map((item) => item.model.trim()).filter(Boolean))];
-      const priceBases = [...new Set(members.filter((item) => Number(item.listPriceUsd || 0) > 0).map((item) => item.priceBasis))];
       const priceSignatures = new Set(members.filter((item) => Number(item.listPriceUsd || 0) > 0).map((item) => [item.priceBasis, item.listPriceUsd, item.vatRate, item.marginPercent].join("|")));
       return normalizeConsolidatedStockItem({
         id: `consolidated-${key}`,
@@ -227,10 +226,10 @@
         category,
         brand: brands.length > 1 ? "Varias marcas" : (brands[0] || ""),
         model: models.length > 1 ? "Varios modelos" : (models[0] || ""),
-        boxes: members.reduce((sum, item) => sum + Number(item.boxes || 0), 0),
+        boxes: 0,
         quantity: members.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
         recordCount: members.length,
-        priceBasis: priceBases.length > 1 ? representative.priceBasis : (priceBases[0] || representative.priceBasis),
+        priceBasis: "Unidad",
         listPriceUsd: weightedAverage((item) => Number(item.listPriceUsd || 0)),
         netPriceUsd: weightedAverage(stockNetPrice),
         marginPercent: weightedAverage((item) => Number(item.marginPercent || 0)),
@@ -240,7 +239,7 @@
         hasPartialPricing: pricedValuationQuantity < valuationQuantity,
         source: "Copia inicial del Stock General"
       });
-    }).filter((item) => item.quantity > 0 || item.boxes > 0);
+    }).filter((item) => item.quantity > 0);
   }
 
   function normalizeInstalledItem(item) {
@@ -723,7 +722,7 @@
 
   function groupedStockSortValue(item, key) {
     if (key === "estimatedTotalCostUsd") return consolidatedEstimatedTotalCost(item);
-    if (["quantity", "boxes", "listPriceUsd", "netPriceUsd", "marginPercent", "estimatedUnitCostUsd", "estimatedTotalCostUsd"].includes(key)) return Number(item[key]) || 0;
+    if (["quantity", "listPriceUsd", "netPriceUsd", "marginPercent", "estimatedUnitCostUsd", "estimatedTotalCostUsd"].includes(key)) return Number(item[key]) || 0;
     return String(item[key] || "");
   }
 
@@ -763,7 +762,6 @@
     const groups = consolidatedStockItems();
     const totalValue = groups.reduce((sum, item) => sum + consolidatedEstimatedTotalCost(item), 0);
     const units = groups.reduce((sum, item) => sum + item.quantity, 0);
-    const boxes = groups.reduce((sum, item) => sum + item.boxes, 0);
     const categories = [...new Set(groups.map((item) => item.category))];
     const unpriced = groups.filter((item) => !item.listPriceUsd || item.hasPartialPricing).length;
 
@@ -772,7 +770,6 @@
     $("#grouped-stock-summary-products").textContent = groups.length.toLocaleString("es-PY");
     $("#grouped-stock-summary-lines").textContent = `${categories.length.toLocaleString("es-PY")} ${categories.length === 1 ? "rubro" : "rubros"}`;
     $("#grouped-stock-summary-units").textContent = units.toLocaleString("es-PY");
-    $("#grouped-stock-summary-boxes").textContent = `${boxes.toLocaleString("es-PY")} ${boxes === 1 ? "caja" : "cajas"}`;
     $("#grouped-stock-summary-unpriced").textContent = unpriced.toLocaleString("es-PY");
     $("#grouped-stock-last-update").textContent = consolidatedMeta.updatedAt ? `Actualizado ${dateFormat.format(new Date(consolidatedMeta.updatedAt))}` : "Sin cambios todavía";
 
@@ -791,7 +788,6 @@
         <td><div class="item-cell"><span class="item-thumb stock-thumb">${escapeHTML(item.name.charAt(0).toUpperCase())}</span><div><strong>${escapeHTML(item.name)}</strong><small>Cantidad independiente · sin número de serie</small></div></div></td>
         <td>${escapeHTML(item.category)}</td>
         <td><strong>${escapeHTML(item.brand || "—")}</strong><small class="grouped-model">${escapeHTML(item.model || "Sin modelo")}</small></td>
-        <td class="numeric"><input class="consolidated-quantity-input" type="number" min="0" step="1" value="${item.boxes}" data-consolidated-boxes-id="${escapeHTML(item.id)}" aria-label="Cajas de ${escapeHTML(item.name)}" /></td>
         <td class="numeric"><input class="consolidated-quantity-input emphasized" type="number" min="0" step="1" value="${item.quantity}" data-consolidated-quantity-id="${escapeHTML(item.id)}" aria-label="Unidades de ${escapeHTML(item.name)}" /></td>
         <td class="numeric">${item.listPriceUsd ? `${formatStockMoney(item.listPriceUsd)}<small class="price-basis">${escapeHTML(priceNote)} · IVA incluido</small>` : "—"}</td>
         <td class="numeric">${item.netPriceUsd ? formatStockMoney(item.netPriceUsd) : "—"}</td>
@@ -805,10 +801,6 @@
     $("#grouped-stock-empty-state").hidden = groups.length !== 0;
     $("#grouped-stock-no-results").hidden = groups.length === 0 || visible.length !== 0;
     $("#grouped-stock-body").hidden = visible.length === 0;
-    $$('[data-consolidated-boxes-id]').forEach((input) => {
-      input.addEventListener("blur", () => updateConsolidatedQuantity(input.dataset.consolidatedBoxesId, "boxes", input.value));
-      input.addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); input.blur(); } });
-    });
     $$('[data-consolidated-quantity-id]').forEach((input) => {
       input.addEventListener("blur", () => updateConsolidatedQuantity(input.dataset.consolidatedQuantityId, "quantity", input.value));
       input.addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); input.blur(); } });
@@ -1005,7 +997,7 @@
 
   function updateConsolidatedQuantity(id, field, value) {
     const item = consolidatedItems.find((entry) => entry.id === id);
-    if (!item || !["boxes", "quantity"].includes(field)) return;
+    if (!item || field !== "quantity") return;
     item[field] = Math.max(0, Math.round(Number(value) || 0));
     item.estimatedTotalCostUsd = consolidatedEstimatedTotalCost(item);
     item.updatedAt = new Date().toISOString();
@@ -1022,9 +1014,7 @@
     } else {
       consolidatedStockForm.elements.id.value = "";
       consolidatedStockForm.elements.category.value = "Insumos";
-      consolidatedStockForm.elements.boxes.value = 0;
       consolidatedStockForm.elements.quantity.value = 0;
-      consolidatedStockForm.elements.priceBasis.value = "Unidad";
       consolidatedStockForm.elements.listPriceUsd.value = 0;
       consolidatedStockForm.elements.vatRate.value = 10;
       consolidatedStockForm.elements.marginPercent.value = stockMeta.defaultMarginPercent;
@@ -1036,15 +1026,14 @@
   }
 
   function updateConsolidatedFormTotal() {
-    const basis = consolidatedStockForm.elements.priceBasis.value;
-    const quantity = basis === "Caja" ? Number(consolidatedStockForm.elements.boxes.value || 0) : Number(consolidatedStockForm.elements.quantity.value || 0);
+    const quantity = Number(consolidatedStockForm.elements.quantity.value || 0);
     const listPriceUsd = Math.max(0, Number(consolidatedStockForm.elements.listPriceUsd.value) || 0);
     const vatRate = Math.max(0, Number(consolidatedStockForm.elements.vatRate.value) || 0);
     const marginPercent = Math.max(0, Number(consolidatedStockForm.elements.marginPercent.value) || 0);
     const netPriceUsd = listPriceUsd / (1 + vatRate / 100);
     const unitCostUsd = netPriceUsd / (1 + marginPercent / 100);
     $("#consolidated-form-total").textContent = formatStockMoney(quantity * unitCostUsd);
-    $("#consolidated-form-total-note").textContent = `${quantity.toLocaleString("es-PY")} ${basis === "Caja" ? (quantity === 1 ? "caja" : "cajas") : (quantity === 1 ? "unidad" : "unidades")} × ${formatStockMoney(unitCostUsd)}`;
+    $("#consolidated-form-total-note").textContent = `${quantity.toLocaleString("es-PY")} ${quantity === 1 ? "unidad" : "unidades"} × ${formatStockMoney(unitCostUsd)}`;
   }
 
   function openStockDetail(id) {
@@ -1180,13 +1169,12 @@
     const query = $("#grouped-stock-search-input").value.trim();
     const category = $("#grouped-stock-category-filter").value;
     const totalValue = visible.reduce((sum, item) => sum + consolidatedEstimatedTotalCost(item), 0);
-    const headers = ["Producto o equipo", "Rubro", "Marca", "Modelo", "Cajas independientes", "Unidades independientes", "Precio aplicado por", "Precio de lista USD (IVA incluido)", "Precio neto USD", "Ganancia %", "Costo unitario estimado USD", "Costo total estimado USD", "Fuente", "Criterio de valorización"];
+    const headers = ["Producto o equipo", "Rubro", "Marca", "Modelo", "Unidades independientes", "Precio aplicado por", "Precio de lista USD (IVA incluido)", "Precio neto USD", "Ganancia %", "Costo unitario estimado USD", "Costo total estimado USD", "Fuente", "Criterio de valorización"];
     const rows = visible.map((item) => [
       item.name,
       item.category,
       item.brand,
       item.model,
-      item.boxes,
       item.quantity,
       item.priceBasis,
       item.listPriceUsd || null,
@@ -1212,11 +1200,11 @@
     const headerRow = 7;
     const firstDataRow = headerRow + 1;
     const lastDataRow = firstDataRow + rows.length - 1;
-    const currencyColumns = [7, 8, 10, 11];
+    const currencyColumns = [6, 7, 9, 10];
 
     worksheet["!cols"] = [
       { wch: 34 }, { wch: 16 }, { wch: 18 }, { wch: 22 }, { wch: 14 },
-      { wch: 14 }, { wch: 18 }, { wch: 20 }, { wch: 18 }, { wch: 12 },
+      { wch: 18 }, { wch: 20 }, { wch: 18 }, { wch: 12 },
       { wch: 22 }, { wch: 22 }, { wch: 30 }, { wch: 42 }
     ];
     worksheet["!autofilter"] = {
@@ -1229,7 +1217,7 @@
         const cell = worksheet[window.XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex })];
         if (cell) cell.z = '"US$" #,##0.00';
       });
-      const marginCell = worksheet[window.XLSX.utils.encode_cell({ r: rowIndex, c: 9 })];
+      const marginCell = worksheet[window.XLSX.utils.encode_cell({ r: rowIndex, c: 8 })];
       if (marginCell) marginCell.z = "0.00%";
     }
 
@@ -1318,9 +1306,9 @@
       category: data.category,
       brand: data.brand.trim(),
       model: data.model.trim(),
-      boxes: Math.max(0, Math.round(Number(data.boxes) || 0)),
+      boxes: 0,
       quantity: Math.max(0, Math.round(Number(data.quantity) || 0)),
-      priceBasis: data.priceBasis,
+      priceBasis: "Unidad",
       listPriceUsd: Math.max(0, Number(data.listPriceUsd) || 0),
       vatRate: Number(data.vatRate),
       marginPercent: Math.min(300, Math.max(0, Number(data.marginPercent) || 0)),
@@ -1415,7 +1403,7 @@
   $("#installed-manufacturer-filter").addEventListener("change", renderInstalled);
   $("#installed-completeness-filter").addEventListener("change", renderInstalled);
   ["boxes", "quantity", "priceBasis", "listPriceUsd", "vatRate", "marginPercent"].forEach((name) => stockForm.elements[name].addEventListener("input", updateStockFormTotal));
-  ["boxes", "quantity", "priceBasis", "listPriceUsd", "vatRate", "marginPercent"].forEach((name) => consolidatedStockForm.elements[name].addEventListener("input", updateConsolidatedFormTotal));
+  ["quantity", "listPriceUsd", "vatRate", "marginPercent"].forEach((name) => consolidatedStockForm.elements[name].addEventListener("input", updateConsolidatedFormTotal));
   $("#stock-default-margin").addEventListener("change", (event) => {
     const value = Number(event.target.value);
     stockMeta.defaultMarginPercent = Number.isFinite(value) ? Math.min(300, Math.max(0, value)) : DEFAULT_STOCK_MARGIN_PERCENT;

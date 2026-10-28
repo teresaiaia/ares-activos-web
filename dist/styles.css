@@ -200,7 +200,7 @@ tbody tr:hover { background: #fafbfe; }
 .stock-row.a-prestamo td, .stock-row.no-disponible td { background: #fafafa; }
 .stock-row.no-disponible td { color: #777b80; }
 .stock-table-wrap table { min-width: 1910px; }
-.grouped-stock-table-wrap table { min-width: 1540px; }
+.grouped-stock-table-wrap table { min-width: 1430px; }
 .grouped-stock-note { padding-left: 22px; border-left: 1px solid #d8dbde; }
 .grouped-stock-note strong, .grouped-stock-note small, .grouped-model { display: block; }
 .grouped-stock-note strong { color: #3f444a; font-size: .82rem; text-transform: uppercase; letter-spacing: .04em; }
