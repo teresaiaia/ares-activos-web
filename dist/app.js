@@ -8,7 +8,7 @@
   const STOCK_PRICE_IMPORT_KEY = "ares-general-stock-price-import-v1";
   const CONSOLIDATED_STOCK_STORAGE_KEY = "ares-consolidated-stock-v1";
   const CONSOLIDATED_STOCK_META_KEY = "ares-consolidated-stock-meta-v1";
-  const CONSOLIDATED_STOCK_VERSION = 1;
+  const CONSOLIDATED_STOCK_VERSION = 2;
   const INSTALLED_STORAGE_KEY = "ares-installed-base-v1";
   const INSTALLED_META_KEY = "ares-installed-base-meta-v1";
   const INSTALLED_SEED_KEY = "ares-installed-base-seed-2026-v1";
