@@ -170,6 +170,7 @@
   function canonicalizeStockModel(value, category, name, brand) {
     const model = canonicalizeAquapure(value);
     if (String(brand || "").trim().toLocaleUpperCase("es") === "HYDRAFACIAL") return "Hydra";
+    if (model.trim().toLocaleUpperCase("es") === "REACTION") return "REACTION";
     if (category !== "Cartuchos") return model;
     const product = `${name || ""} ${model}`;
     if (/\bMPT\b/i.test(product)) return "MPT";
