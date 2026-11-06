@@ -683,21 +683,6 @@
   }
 
   function renderStock() {
-    const units = stockItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
-    const available = stockItems.filter((item) => stockStatus(item) === "Disponible").length;
-    const unavailable = stockItems.filter((item) => stockStatus(item) === "No disponible").length;
-    const loans = stockItems.filter((item) => stockStatus(item) === "A préstamo").length;
-    const categories = new Set(stockItems.map((item) => item.category.trim().toLocaleLowerCase("es")).filter(Boolean)).size;
-    const totalValue = stockItems.reduce((sum, item) => sum + stockEstimatedTotalCost(item), 0);
-    const unpriced = stockItems.filter((item) => !Number(item.listPriceUsd)).length;
-
-    $("#stock-summary-value").textContent = formatStockMoney(totalValue);
-    $("#stock-summary-unpriced").textContent = `${unpriced.toLocaleString("es-PY")} ${unpriced === 1 ? "registro sin precio de lista" : "registros sin precio de lista"}`;
-    $("#stock-summary-records").textContent = stockItems.length.toLocaleString("es-PY");
-    $("#stock-summary-categories").textContent = `${categories} ${categories === 1 ? "rubro" : "rubros"}`;
-    $("#stock-summary-available").textContent = available.toLocaleString("es-PY");
-    $("#stock-summary-status-note").textContent = `${unavailable.toLocaleString("es-PY")} no disponibles · ${loans.toLocaleString("es-PY")} a préstamo`;
-    $("#stock-summary-units").textContent = units.toLocaleString("es-PY");
     $("#stock-last-update").textContent = stockMeta.updatedAt ? `Actualizado ${dateFormat.format(new Date(stockMeta.updatedAt))}` : "Sin cambios todavía";
     $("#stock-default-margin").value = stockMeta.defaultMarginPercent;
 
@@ -716,6 +701,25 @@
     $("#stock-brand-filter").innerHTML = `<option value="">Todas las marcas</option>${sortedBrands.map(([key, label]) => `<option value="${escapeHTML(key)}" ${key === selectedBrandKey ? "selected" : ""}>${escapeHTML(label)}</option>`).join("")}`;
 
     const visible = filteredStockItems();
+    const units = visible.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+    const available = visible.filter((item) => stockStatus(item) === "Disponible").length;
+    const unavailable = visible.filter((item) => stockStatus(item) === "No disponible").length;
+    const loans = visible.filter((item) => stockStatus(item) === "A préstamo").length;
+    const categories = new Set(visible.map((item) => item.category.trim().toLocaleLowerCase("es")).filter(Boolean)).size;
+    const purchaseValue = visible.reduce((sum, item) => sum + stockEstimatedTotalCost(item), 0);
+    const netValue = visible.reduce((sum, item) => sum + stockValuationQuantity(item) * stockNetPrice(item), 0);
+    const unpriced = visible.filter((item) => !Number(item.listPriceUsd)).length;
+    const hasActiveFilters = ["#stock-search-input", "#stock-category-filter", "#stock-brand-filter", "#stock-status-filter"].some((selector) => $(selector).value);
+
+    $("#stock-summary-value").textContent = formatStockMoney(purchaseValue);
+    $("#stock-summary-net-value").textContent = formatStockMoney(netValue);
+    $("#stock-summary-selection").textContent = hasActiveFilters ? "Según los filtros activos" : "Todo el stock";
+    $("#stock-summary-unpriced").textContent = `${unpriced.toLocaleString("es-PY")} ${unpriced === 1 ? "registro sin precio de lista" : "registros sin precio de lista"}`;
+    $("#stock-summary-records").textContent = visible.length.toLocaleString("es-PY");
+    $("#stock-summary-categories").textContent = `${categories} ${categories === 1 ? "rubro" : "rubros"}`;
+    $("#stock-summary-available").textContent = available.toLocaleString("es-PY");
+    $("#stock-summary-status-note").textContent = `${unavailable.toLocaleString("es-PY")} no disponibles · ${loans.toLocaleString("es-PY")} a préstamo`;
+    $("#stock-summary-units").textContent = units.toLocaleString("es-PY");
     renderStockSortControls();
     $("#stock-table-count").textContent = visible.length === stockItems.length
       ? `${stockItems.length} ${stockItems.length === 1 ? "producto" : "productos"}`
@@ -787,23 +791,27 @@
 
   function renderGroupedStock() {
     const groups = consolidatedStockItems();
-    const totalValue = groups.reduce((sum, item) => sum + consolidatedEstimatedTotalCost(item), 0);
-    const units = groups.reduce((sum, item) => sum + item.quantity, 0);
-    const categories = [...new Set(groups.map((item) => item.category))];
-    const unpriced = groups.filter((item) => !item.listPriceUsd || item.hasPartialPricing).length;
-
-    $("#grouped-stock-summary-value").textContent = formatStockMoney(totalValue);
-    $("#grouped-stock-summary-valuation").textContent = "Calculado solo con las cantidades de esta sección";
-    $("#grouped-stock-summary-products").textContent = groups.length.toLocaleString("es-PY");
-    $("#grouped-stock-summary-lines").textContent = `${categories.length.toLocaleString("es-PY")} ${categories.length === 1 ? "rubro" : "rubros"}`;
-    $("#grouped-stock-summary-units").textContent = units.toLocaleString("es-PY");
-    $("#grouped-stock-summary-unpriced").textContent = unpriced.toLocaleString("es-PY");
     $("#grouped-stock-last-update").textContent = consolidatedMeta.updatedAt ? `Actualizado ${dateFormat.format(new Date(consolidatedMeta.updatedAt))}` : "Sin cambios todavía";
 
     const selectedCategory = $("#grouped-stock-category-filter").value;
-    $("#grouped-stock-category-filter").innerHTML = `<option value="">Todos los rubros</option>${categories.sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" })).map((category) => `<option ${category === selectedCategory ? "selected" : ""}>${escapeHTML(category)}</option>`).join("")}`;
+    const allCategories = [...new Set(groups.map((item) => item.category))];
+    $("#grouped-stock-category-filter").innerHTML = `<option value="">Todos los rubros</option>${allCategories.sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" })).map((category) => `<option ${category === selectedCategory ? "selected" : ""}>${escapeHTML(category)}</option>`).join("")}`;
 
     const visible = filteredGroupedStockItems(groups);
+    const purchaseValue = visible.reduce((sum, item) => sum + consolidatedEstimatedTotalCost(item), 0);
+    const netValue = visible.reduce((sum, item) => sum + stockValuationQuantity(item) * (Number(item.netPriceUsd) || stockNetPrice(item)), 0);
+    const units = visible.reduce((sum, item) => sum + item.quantity, 0);
+    const categories = [...new Set(visible.map((item) => item.category))];
+    const unpriced = visible.filter((item) => !item.listPriceUsd || item.hasPartialPricing).length;
+    const hasActiveFilters = ["#grouped-stock-search-input", "#grouped-stock-category-filter"].some((selector) => $(selector).value);
+
+    $("#grouped-stock-summary-value").textContent = formatStockMoney(purchaseValue);
+    $("#grouped-stock-summary-net-value").textContent = formatStockMoney(netValue);
+    $("#grouped-stock-summary-valuation").textContent = hasActiveFilters ? "Según los filtros activos" : "Todo el stock consolidado";
+    $("#grouped-stock-summary-products").textContent = visible.length.toLocaleString("es-PY");
+    $("#grouped-stock-summary-lines").textContent = `${categories.length.toLocaleString("es-PY")} ${categories.length === 1 ? "rubro" : "rubros"}`;
+    $("#grouped-stock-summary-units").textContent = units.toLocaleString("es-PY");
+    $("#grouped-stock-summary-unpriced").textContent = unpriced.toLocaleString("es-PY");
     renderGroupedStockSortControls();
     $("#grouped-stock-table-count").textContent = visible.length === groups.length
       ? `${groups.length} ${groups.length === 1 ? "producto" : "productos"}`

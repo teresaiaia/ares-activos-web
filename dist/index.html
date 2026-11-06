@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#12213f" />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%2312213f'/%3E%3Cpath d='M17 46 29 17h7l12 29h-8l-2-6H26l-2 6Zm12-13h6l-3-9Z' fill='%236fe0c1'/%3E%3C/svg%3E" />
     <title>Gestión de activos · ARES Activos</title>
-    <link rel="stylesheet" href="styles.css?v=19" />
+    <link rel="stylesheet" href="styles.css?v=20" />
   </head>
   <body class="cloud-loading">
     <section id="auth-screen" class="auth-screen" aria-labelledby="auth-title">
@@ -157,23 +157,28 @@
         </section>
 
         <section id="stock-view" class="view stock-view-theme">
-          <div class="summary-grid" aria-label="Resumen del stock general">
-            <article class="summary-card total-card stock-total-card">
-              <div class="summary-label"><span class="summary-icon">$</span> Costo estimado para seguro</div>
+          <div class="summary-grid stock-summary-grid" aria-label="Resumen del stock general según los filtros activos">
+            <article class="summary-card total-card stock-total-card stock-value-card">
+              <div class="summary-label"><span class="summary-icon">$</span> Valor de compra estimado</div>
               <strong id="stock-summary-value">US$ 0,00</strong>
               <p id="stock-summary-unpriced">0 registros sin precio de lista</p>
             </article>
-            <article class="summary-card">
+            <article class="summary-card stock-net-card stock-value-card">
+              <div class="summary-label"><span class="summary-icon stock-soft">N</span> Valor neto sin IVA</div>
+              <strong id="stock-summary-net-value">US$ 0,00</strong>
+              <p id="stock-summary-selection">Todo el stock</p>
+            </article>
+            <article class="summary-card stock-count-card">
               <div class="summary-label"><span class="summary-icon stock-neutral">▦</span> Registros</div>
               <strong id="stock-summary-records">0</strong>
               <p id="stock-summary-categories">0 rubros</p>
             </article>
-            <article class="summary-card">
+            <article class="summary-card stock-count-card">
               <div class="summary-label"><span class="summary-icon stock-alert">✓</span> Disponibles</div>
               <strong id="stock-summary-available">0</strong>
               <p id="stock-summary-status-note">0 no disponibles · 0 a préstamo</p>
             </article>
-            <article class="summary-card">
+            <article class="summary-card stock-count-card">
               <div class="summary-label"><span class="summary-icon stock-soft">#</span> Unidades</div>
               <strong id="stock-summary-units">0</strong>
               <p>Cantidad total registrada</p>
@@ -256,23 +261,28 @@
         </section>
 
         <section id="stock-grouped-view" class="view stock-view-theme">
-          <div class="summary-grid" aria-label="Resumen del stock consolidado">
-            <article class="summary-card total-card stock-total-card">
-              <div class="summary-label"><span class="summary-icon">$</span> Costo estimado para seguro</div>
+          <div class="summary-grid stock-summary-grid" aria-label="Resumen del stock consolidado según los filtros activos">
+            <article class="summary-card total-card stock-total-card stock-value-card">
+              <div class="summary-label"><span class="summary-icon">$</span> Valor de compra estimado</div>
               <strong id="grouped-stock-summary-value">US$ 0,00</strong>
-              <p id="grouped-stock-summary-valuation">Mismo total que el stock detallado</p>
+              <p id="grouped-stock-summary-valuation">Todo el stock consolidado</p>
             </article>
-            <article class="summary-card">
+            <article class="summary-card stock-net-card stock-value-card">
+              <div class="summary-label"><span class="summary-icon stock-soft">N</span> Valor neto sin IVA</div>
+              <strong id="grouped-stock-summary-net-value">US$ 0,00</strong>
+              <p>Precio de lista sin IVA</p>
+            </article>
+            <article class="summary-card stock-count-card">
               <div class="summary-label"><span class="summary-icon stock-neutral">▦</span> Productos agrupados</div>
               <strong id="grouped-stock-summary-products">0</strong>
               <p id="grouped-stock-summary-lines">0 rubros</p>
             </article>
-            <article class="summary-card">
+            <article class="summary-card stock-count-card">
               <div class="summary-label"><span class="summary-icon stock-alert">#</span> Unidades</div>
               <strong id="grouped-stock-summary-units">0</strong>
               <p>Cantidades independientes</p>
             </article>
-            <article class="summary-card">
+            <article class="summary-card stock-count-card">
               <div class="summary-label"><span class="summary-icon stock-soft">?</span> Sin precio</div>
               <strong id="grouped-stock-summary-unpriced">0</strong>
               <p>Productos a valorizar</p>
@@ -697,6 +707,6 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.102.0/dist/umd/supabase.min.js"></script>
     <script src="vendor/xlsx.full.min.js?v=0.20.3"></script>
     <script src="cloud-config.js?v=1"></script>
-    <script src="app.js?v=27"></script>
+    <script src="app.js?v=28"></script>
   </body>
 </html>
