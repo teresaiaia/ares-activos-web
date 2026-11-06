@@ -167,8 +167,9 @@
     return String(value || "").replace(/aquapure/gi, "AQUAPURE");
   }
 
-  function canonicalizeStockModel(value, category, name) {
+  function canonicalizeStockModel(value, category, name, brand) {
     const model = canonicalizeAquapure(value);
+    if (String(brand || "").trim().toLocaleUpperCase("es") === "HYDRAFACIAL") return "Hydra";
     if (category !== "Cartuchos") return model;
     const product = `${name || ""} ${model}`;
     if (/\bMPT\b/i.test(product)) return "MPT";
@@ -181,9 +182,10 @@
     const quantity = Math.max(0, Math.round(Number(item.quantity) || 0));
     const name = canonicalizeAquapure(item.name || "Producto sin nombre");
     const category = item.category || "Insumos";
+    const brand = String(item.brand || "").trim().toLocaleUpperCase("es");
     return {
       id: item.id || uid(), name, category,
-      brand: String(item.brand || "").trim().toLocaleUpperCase("es"), model: canonicalizeStockModel(item.model, category, name), serial: item.serial || "",
+      brand, model: canonicalizeStockModel(item.model, category, name, brand), serial: item.serial || "",
       status: STOCK_STATUSES.includes(item.status) ? item.status : (Number(item.quantity) > 0 ? "Disponible" : "No disponible"),
       boxes: 0, quantity,
       priceBasis: "Unidad",
@@ -1312,8 +1314,9 @@
     const quantity = Math.max(0, Math.round(Number(data.quantity) || 0));
     const name = canonicalizeAquapure(data.name.trim());
     const category = data.category;
+    const brand = data.brand.trim().toLocaleUpperCase("es");
     const item = {
-      id: data.id || uid(), name, category, brand: data.brand.trim().toLocaleUpperCase("es"), model: canonicalizeStockModel(data.model.trim(), category, name), serial: data.serial.trim(),
+      id: data.id || uid(), name, category, brand, model: canonicalizeStockModel(data.model.trim(), category, name, brand), serial: data.serial.trim(),
       status: data.status, boxes: 0, quantity,
       priceBasis: "Unidad", listPriceUsd: Math.max(0, Number(data.listPriceUsd) || 0),
       vatRate: [0, 5, 10].includes(Number(data.vatRate)) ? Number(data.vatRate) : 10, marginPercent: Math.min(300, Math.max(0, Number(data.marginPercent) || 0)), valuationCriterion: STOCK_VALUATION_CRITERION,
