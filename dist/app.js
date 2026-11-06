@@ -166,11 +166,14 @@
   function normalizeStockItem(item) {
     const legacyNotes = [item.notes, item.location && `Ubicación anterior: ${item.location}`, item.unit && `Unidad anterior: ${item.unit}`].filter(Boolean).join(" · ");
     const defaultPriceBasis = Number(item.quantity) > 0 || Number(item.boxes) === 0 ? "Unidad" : "Caja";
+    const quantity = Math.max(0, Math.round(Number(item.quantity) || 0));
+    const rawBoxes = Math.max(0, Math.round(Number(item.boxes) || 0));
+    const boxes = rawBoxes === 1 && quantity > 0 ? 0 : rawBoxes;
     return {
       id: item.id || uid(), name: item.name || "Producto sin nombre", category: item.category || "Insumos",
       brand: String(item.brand || "").trim().toLocaleUpperCase("es"), model: item.model || "", serial: item.serial || "",
       status: STOCK_STATUSES.includes(item.status) ? item.status : (Number(item.quantity) > 0 ? "Disponible" : "No disponible"),
-      boxes: Math.max(0, Math.round(Number(item.boxes) || 0)), quantity: Math.max(0, Math.round(Number(item.quantity) || 0)),
+      boxes, quantity,
       priceBasis: STOCK_PRICE_BASES.includes(item.priceBasis) ? item.priceBasis : defaultPriceBasis,
       listPriceUsd: Math.max(0, Number(item.listPriceUsd) || 0),
       vatRate: [0, 5, 10].includes(Number(item.vatRate)) ? Number(item.vatRate) : 10,
@@ -1302,9 +1305,11 @@
     const data = Object.fromEntries(new FormData(stockForm));
     const existing = stockItems.find((entry) => entry.id === data.id);
     const priceWasChanged = existing && Number(existing.listPriceUsd || 0) !== Number(data.listPriceUsd || 0);
+    const quantity = Math.max(0, Math.round(Number(data.quantity) || 0));
+    const rawBoxes = Math.max(0, Math.round(Number(data.boxes) || 0));
     const item = {
       id: data.id || uid(), name: data.name.trim(), category: data.category, brand: data.brand.trim().toLocaleUpperCase("es"), model: data.model.trim(), serial: data.serial.trim(),
-      status: data.status, boxes: Math.max(0, Math.round(Number(data.boxes) || 0)), quantity: Math.max(0, Math.round(Number(data.quantity) || 0)),
+      status: data.status, boxes: rawBoxes === 1 && quantity > 0 ? 0 : rawBoxes, quantity,
       priceBasis: STOCK_PRICE_BASES.includes(data.priceBasis) ? data.priceBasis : "Unidad", listPriceUsd: Math.max(0, Number(data.listPriceUsd) || 0),
       vatRate: [0, 5, 10].includes(Number(data.vatRate)) ? Number(data.vatRate) : 10, marginPercent: Math.min(300, Math.max(0, Number(data.marginPercent) || 0)), valuationCriterion: STOCK_VALUATION_CRITERION,
       priceSource: priceWasChanged ? "Precio editado manualmente" : (existing?.priceSource || (Number(data.listPriceUsd) ? "Carga manual" : "")), priceSourceRow: priceWasChanged ? null : (existing?.priceSourceRow || null),
