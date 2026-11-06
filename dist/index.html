@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#12213f" />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%2312213f'/%3E%3Cpath d='M17 46 29 17h7l12 29h-8l-2-6H26l-2 6Zm12-13h6l-3-9Z' fill='%236fe0c1'/%3E%3C/svg%3E" />
     <title>Gestión de activos · ARES Activos</title>
-    <link rel="stylesheet" href="styles.css?v=17" />
+    <link rel="stylesheet" href="styles.css?v=18" />
   </head>
   <body class="cloud-loading">
     <section id="auth-screen" class="auth-screen" aria-labelledby="auth-title">
@@ -176,7 +176,7 @@
             <article class="summary-card">
               <div class="summary-label"><span class="summary-icon stock-soft">#</span> Unidades</div>
               <strong id="stock-summary-units">0</strong>
-              <p id="stock-summary-boxes">0 cajas</p>
+              <p>Cantidad total registrada</p>
             </article>
           </div>
 
@@ -227,7 +227,6 @@
                     <th class="sortable-th"><button class="sort-button" type="button" data-stock-sort-key="brand" data-sort-label="marca">Marca <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
                     <th class="sortable-th"><button class="sort-button" type="button" data-stock-sort-key="model" data-sort-label="modelo">Modelo <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
                     <th class="sortable-th"><button class="sort-button" type="button" data-stock-sort-key="serial" data-sort-label="número de serie">Serie <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
-                    <th class="numeric sortable-th"><button class="sort-button" type="button" data-stock-sort-key="boxes" data-sort-label="cajas">Cajas <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
                     <th class="numeric sortable-th"><button class="sort-button" type="button" data-stock-sort-key="quantity" data-sort-label="unidades">Unidades <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
                     <th class="numeric sortable-th"><button class="sort-button" type="button" data-stock-sort-key="listPriceUsd" data-sort-label="precio de lista">Precio lista US$<small>IVA incluido</small> <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
                     <th class="numeric sortable-th"><button class="sort-button" type="button" data-stock-sort-key="netPriceUsd" data-sort-label="precio neto">Precio neto US$ <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
@@ -457,7 +456,7 @@
                 <div><h3>1. Stock general valorizado</h3><p>Este importe forma parte del total del seguro. Se calcula en dólares, sin IVA y descontando la ganancia configurada en cada producto.</p></div>
               </div>
               <table class="report-table report-stock-summary">
-                <thead><tr><th>Rubro</th><th>Con precio</th><th>Unidades</th><th>Cajas</th><th>Costo estimado</th></tr></thead>
+                <thead><tr><th>Rubro</th><th>Con precio</th><th>Unidades</th><th>Costo estimado</th></tr></thead>
                 <tbody id="report-stock-summary-body"></tbody>
               </table>
             </div>
@@ -578,11 +577,7 @@
           <label>Marca <input name="brand" placeholder="Marca" /></label>
           <label>Modelo <input name="model" placeholder="Modelo" /></label>
           <label class="span-2">Número de serie <input name="serial" placeholder="Número de serie, si corresponde" /></label>
-          <label>Cajas <span>*</span><input name="boxes" type="number" min="0" step="1" value="0" required /></label>
           <label>Unidades <span>*</span><input name="quantity" type="number" min="0" step="1" value="0" required /></label>
-          <label>Precio aplicado por <span>*</span>
-            <select name="priceBasis" required><option>Unidad</option><option>Caja</option></select>
-          </label>
           <label>Precio de lista (US$, IVA incluido) <span>*</span><input name="listPriceUsd" type="number" min="0" step="0.01" value="0" required /></label>
           <label>IVA incluido <span>*</span>
             <select name="vatRate" required><option value="10">10%</option><option value="5">5%</option><option value="0">Exento</option></select>
@@ -704,6 +699,6 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.102.0/dist/umd/supabase.min.js"></script>
     <script src="vendor/xlsx.full.min.js?v=0.20.3"></script>
     <script src="cloud-config.js?v=1"></script>
-    <script src="app.js?v=22"></script>
+    <script src="app.js?v=23"></script>
   </body>
 </html>

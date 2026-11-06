@@ -17,7 +17,7 @@
   const STOCK_RUBRICS = ["Equipos", "Cartuchos", "Insumos", "Repuestos", "Cosmética"];
   const STOCK_RUBRIC_VERSION = "stock-rubrics-2026-09-v1";
   const STOCK_STATUSES = ["Disponible", "No disponible", "A préstamo"];
-  const STOCK_PRICE_BASES = ["Unidad", "Caja"];
+  const STOCK_PRICE_BASES = ["Unidad"];
   const DEFAULT_STOCK_MARGIN_PERCENT = 40;
   const DEFAULT_INSURANCE_EXCHANGE_RATE = 5900;
   const STOCK_VALUATION_CRITERION = "Costo estimado previo a la venta";
@@ -165,16 +165,13 @@
 
   function normalizeStockItem(item) {
     const legacyNotes = [item.notes, item.location && `Ubicación anterior: ${item.location}`, item.unit && `Unidad anterior: ${item.unit}`].filter(Boolean).join(" · ");
-    const defaultPriceBasis = Number(item.quantity) > 0 || Number(item.boxes) === 0 ? "Unidad" : "Caja";
     const quantity = Math.max(0, Math.round(Number(item.quantity) || 0));
-    const rawBoxes = Math.max(0, Math.round(Number(item.boxes) || 0));
-    const boxes = rawBoxes === 1 && quantity > 0 ? 0 : rawBoxes;
     return {
       id: item.id || uid(), name: item.name || "Producto sin nombre", category: item.category || "Insumos",
       brand: String(item.brand || "").trim().toLocaleUpperCase("es"), model: item.model || "", serial: item.serial || "",
       status: STOCK_STATUSES.includes(item.status) ? item.status : (Number(item.quantity) > 0 ? "Disponible" : "No disponible"),
-      boxes, quantity,
-      priceBasis: STOCK_PRICE_BASES.includes(item.priceBasis) ? item.priceBasis : defaultPriceBasis,
+      boxes: 0, quantity,
+      priceBasis: "Unidad",
       listPriceUsd: Math.max(0, Number(item.listPriceUsd) || 0),
       vatRate: [0, 5, 10].includes(Number(item.vatRate)) ? Number(item.vatRate) : 10,
       marginPercent: Number.isFinite(Number(item.marginPercent)) ? Math.min(300, Math.max(0, Number(item.marginPercent))) : DEFAULT_STOCK_MARGIN_PERCENT,
@@ -420,7 +417,7 @@
   function formatMoney(value) { return money.format(Number(value) || 0).replace("PYG", "₲").trim(); }
   function formatStockMoney(value) { return `US$ ${(Number(value) || 0).toLocaleString("es-PY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
   function subtotal(item) { return (Number(item.quantity) || 0) * (Number(item.unitCost) || 0); }
-  function stockValuationQuantity(item) { return item.priceBasis === "Caja" ? Number(item.boxes || 0) : Number(item.quantity || 0); }
+  function stockValuationQuantity(item) { return Number(item.quantity || 0); }
   function stockNetPrice(item) { return Number(item.listPriceUsd || 0) / (1 + Number(item.vatRate || 0) / 100); }
   function stockEstimatedUnitCost(item) { return stockNetPrice(item) / (1 + Number(item.marginPercent || 0) / 100); }
   function stockEstimatedTotalCost(item) { return stockValuationQuantity(item) * stockEstimatedUnitCost(item); }
@@ -498,17 +495,16 @@
     const groupedStock = new Map();
     stockItems.forEach((item) => {
       const category = item.category || "Sin rubro";
-      const group = groupedStock.get(category) || { category, records: 0, priced: 0, units: 0, boxes: 0, totalUsd: 0 };
+      const group = groupedStock.get(category) || { category, records: 0, priced: 0, units: 0, totalUsd: 0 };
       group.records += 1;
       if (Number(item.listPriceUsd) > 0) group.priced += 1;
       group.units += Number(item.quantity || 0);
-      group.boxes += Number(item.boxes || 0);
       group.totalUsd += stockEstimatedTotalCost(item);
       groupedStock.set(category, group);
     });
     const stockGroups = [...groupedStock.values()].sort((a, b) => a.category.localeCompare(b.category, "es", { sensitivity: "base" }));
     $("#report-stock-summary-body").innerHTML = stockGroups.map((group) => `
-      <tr><td><strong>${escapeHTML(group.category)}</strong></td><td>${group.priced} de ${group.records}</td><td>${group.units.toLocaleString("es-PY")}</td><td>${group.boxes.toLocaleString("es-PY")}</td><td><strong>${formatStockMoney(group.totalUsd)}</strong></td></tr>
+      <tr><td><strong>${escapeHTML(group.category)}</strong></td><td>${group.priced} de ${group.records}</td><td>${group.units.toLocaleString("es-PY")}</td><td><strong>${formatStockMoney(group.totalUsd)}</strong></td></tr>
     `).join("");
   }
 
@@ -622,7 +618,7 @@
   }
 
   function stockSortValue(item, key) {
-    if (["quantity", "boxes", "listPriceUsd", "marginPercent"].includes(key)) return Number(item[key]) || 0;
+    if (["quantity", "listPriceUsd", "marginPercent"].includes(key)) return Number(item[key]) || 0;
     if (key === "netPriceUsd") return stockNetPrice(item);
     if (key === "estimatedUnitCostUsd") return stockEstimatedUnitCost(item);
     if (key === "estimatedTotalCostUsd") return stockEstimatedTotalCost(item);
@@ -670,7 +666,6 @@
 
   function renderStock() {
     const units = stockItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
-    const boxes = stockItems.reduce((sum, item) => sum + Number(item.boxes || 0), 0);
     const available = stockItems.filter((item) => stockStatus(item) === "Disponible").length;
     const unavailable = stockItems.filter((item) => stockStatus(item) === "No disponible").length;
     const loans = stockItems.filter((item) => stockStatus(item) === "A préstamo").length;
@@ -685,7 +680,6 @@
     $("#stock-summary-available").textContent = available.toLocaleString("es-PY");
     $("#stock-summary-status-note").textContent = `${unavailable.toLocaleString("es-PY")} no disponibles · ${loans.toLocaleString("es-PY")} a préstamo`;
     $("#stock-summary-units").textContent = units.toLocaleString("es-PY");
-    $("#stock-summary-boxes").textContent = `${boxes.toLocaleString("es-PY")} ${boxes === 1 ? "caja" : "cajas"}`;
     $("#stock-last-update").textContent = stockMeta.updatedAt ? `Actualizado ${dateFormat.format(new Date(stockMeta.updatedAt))}` : "Sin cambios todavía";
     $("#stock-default-margin").value = stockMeta.defaultMarginPercent;
 
@@ -714,7 +708,7 @@
       <tr class="stock-row ${stockStatusClass(item)}">
         <td><div class="item-cell"><span class="item-thumb stock-thumb">${escapeHTML(item.name.charAt(0).toUpperCase())}</span><div><strong>${escapeHTML(item.name)}</strong><small>${escapeHTML(item.notes || item.source || "Sin notas adicionales")}</small></div></div></td>
         <td>${escapeHTML(item.category)}</td><td>${escapeHTML(item.brand || "—")}</td><td>${escapeHTML(item.model || "—")}</td><td>${escapeHTML(item.serial || "—")}</td>
-        <td class="numeric">${Number(item.boxes).toLocaleString("es-PY")}</td><td class="numeric"><strong>${Number(item.quantity).toLocaleString("es-PY")}</strong></td>
+        <td class="numeric"><strong>${Number(item.quantity).toLocaleString("es-PY")}</strong></td>
         <td class="numeric">${Number(item.listPriceUsd) ? `${formatStockMoney(item.listPriceUsd)}<small class="price-basis">por ${item.priceBasis.toLocaleLowerCase("es")} · IVA ${item.vatRate}%</small>` : "—"}</td>
         <td class="numeric">${Number(item.listPriceUsd) ? formatStockMoney(stockNetPrice(item)) : "—"}</td>
         <td class="numeric"><span class="margin-badge">${Number(item.marginPercent).toLocaleString("es-PY", { maximumFractionDigits: 2 })}%</span></td>
@@ -985,9 +979,7 @@
       Object.entries(item).forEach(([key, value]) => { if (stockForm.elements[key]) stockForm.elements[key].value = value ?? ""; });
     } else {
       stockForm.elements.status.value = "Disponible";
-      stockForm.elements.boxes.value = 0;
       stockForm.elements.quantity.value = 0;
-      stockForm.elements.priceBasis.value = "Unidad";
       stockForm.elements.listPriceUsd.value = 0;
       stockForm.elements.vatRate.value = 10;
       stockForm.elements.marginPercent.value = stockMeta.defaultMarginPercent;
@@ -999,8 +991,7 @@
   }
 
   function updateStockFormTotal() {
-    const basis = stockForm.elements.priceBasis.value;
-    const quantity = basis === "Caja" ? Number(stockForm.elements.boxes.value || 0) : Number(stockForm.elements.quantity.value || 0);
+    const quantity = Number(stockForm.elements.quantity.value || 0);
     const listPriceUsd = Math.max(0, Number(stockForm.elements.listPriceUsd.value) || 0);
     const vatRate = Math.max(0, Number(stockForm.elements.vatRate.value) || 0);
     const marginPercent = Math.max(0, Number(stockForm.elements.marginPercent.value) || 0);
@@ -1009,7 +1000,7 @@
     $("#stock-form-net").textContent = formatStockMoney(netPriceUsd);
     $("#stock-form-unit-cost").textContent = formatStockMoney(estimatedUnitCostUsd);
     $("#stock-form-total").textContent = formatStockMoney(quantity * estimatedUnitCostUsd);
-    $("#stock-form-total-note").textContent = `${quantity.toLocaleString("es-PY")} ${basis === "Caja" ? (quantity === 1 ? "caja" : "cajas") : (quantity === 1 ? "unidad" : "unidades")} × ${formatStockMoney(estimatedUnitCostUsd)}`;
+    $("#stock-form-total-note").textContent = `${quantity.toLocaleString("es-PY")} ${quantity === 1 ? "unidad" : "unidades"} × ${formatStockMoney(estimatedUnitCostUsd)}`;
   }
 
   function updateConsolidatedQuantity(id, field, value) {
@@ -1065,7 +1056,7 @@
         <div><dt>Rubro</dt><dd>${escapeHTML(item.category)}</dd></div><div><dt>Estado</dt><dd><span class="stock-status ${stockStatusClass(item)}">${status}</span></dd></div>
         <div><dt>Marca</dt><dd>${escapeHTML(item.brand || "—")}</dd></div><div><dt>Modelo</dt><dd>${escapeHTML(item.model || "—")}</dd></div>
         <div><dt>Número de serie</dt><dd>${escapeHTML(item.serial || "—")}</dd></div><div><dt>Fuente</dt><dd>${escapeHTML(item.source || "Registro manual")}</dd></div>
-        <div><dt>Cajas</dt><dd>${Number(item.boxes).toLocaleString("es-PY")}</dd></div><div><dt>Unidades</dt><dd><strong>${Number(item.quantity).toLocaleString("es-PY")}</strong></dd></div>
+        <div><dt>Unidades</dt><dd><strong>${Number(item.quantity).toLocaleString("es-PY")}</strong></dd></div>
         <div><dt>Precio de lista (IVA incluido)</dt><dd>${Number(item.listPriceUsd) ? `${formatStockMoney(item.listPriceUsd)} por ${item.priceBasis.toLocaleLowerCase("es")}` : "Sin precio"}</dd></div><div><dt>IVA</dt><dd>${Number(item.vatRate) ? `${item.vatRate}%` : "Exento"}</dd></div>
         <div><dt>Precio neto sin IVA</dt><dd>${Number(item.listPriceUsd) ? formatStockMoney(stockNetPrice(item)) : "—"}</dd></div><div><dt>Ganancia aplicada</dt><dd>${Number(item.marginPercent).toLocaleString("es-PY", { maximumFractionDigits: 2 })}%</dd></div>
         <div><dt>Costo estimado unitario</dt><dd>${Number(item.listPriceUsd) ? `${formatStockMoney(stockEstimatedUnitCost(item))} por ${item.priceBasis.toLocaleLowerCase("es")}` : "—"}</dd></div><div><dt>Costo total estimado</dt><dd><strong>${Number(item.listPriceUsd) ? formatStockMoney(stockEstimatedTotalCost(item)) : "—"}</strong></dd></div>
@@ -1153,8 +1144,8 @@
       showToast("No hay resultados para exportar");
       return;
     }
-    const headers = ["Producto o equipo", "Rubro", "Marca", "Modelo", "Número de serie", "Estado", "Cajas", "Unidades", "Precio aplicado por", "Precio de lista USD (IVA incluido)", "IVA %", "Precio neto USD", "Ganancia %", "Costo unitario estimado USD", "Costo total estimado USD", "Fuente del precio", "Criterio de valorización", "Notas", "Fuente del inventario"];
-    const rows = visible.map((item) => [item.name, item.category, item.brand, item.model, item.serial, stockStatus(item), item.boxes, item.quantity, item.priceBasis, item.listPriceUsd, item.vatRate, stockNetPrice(item), item.marginPercent, stockEstimatedUnitCost(item), stockEstimatedTotalCost(item), item.priceSource, STOCK_VALUATION_CRITERION, item.notes, item.source]);
+    const headers = ["Producto o equipo", "Rubro", "Marca", "Modelo", "Número de serie", "Estado", "Unidades", "Precio aplicado por", "Precio de lista USD (IVA incluido)", "IVA %", "Precio neto USD", "Ganancia %", "Costo unitario estimado USD", "Costo total estimado USD", "Fuente del precio", "Criterio de valorización", "Notas", "Fuente del inventario"];
+    const rows = visible.map((item) => [item.name, item.category, item.brand, item.model, item.serial, stockStatus(item), item.quantity, item.priceBasis, item.listPriceUsd, item.vatRate, stockNetPrice(item), item.marginPercent, stockEstimatedUnitCost(item), stockEstimatedTotalCost(item), item.priceSource, STOCK_VALUATION_CRITERION, item.notes, item.source]);
     const filterPart = filenamePart($("#stock-brand-filter").value || $("#stock-category-filter").value || $("#stock-status-filter").value || $("#stock-search-input").value.trim());
     download(`stock-general-ares${filterPart ? `-${filterPart}` : ""}-${localDateStamp()}.csv`, `\ufeff${[headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n")}`, "text/csv;charset=utf-8");
     showToast(`Stock exportado: ${visible.length} ${visible.length === 1 ? "resultado" : "resultados"}`);
@@ -1306,11 +1297,10 @@
     const existing = stockItems.find((entry) => entry.id === data.id);
     const priceWasChanged = existing && Number(existing.listPriceUsd || 0) !== Number(data.listPriceUsd || 0);
     const quantity = Math.max(0, Math.round(Number(data.quantity) || 0));
-    const rawBoxes = Math.max(0, Math.round(Number(data.boxes) || 0));
     const item = {
       id: data.id || uid(), name: data.name.trim(), category: data.category, brand: data.brand.trim().toLocaleUpperCase("es"), model: data.model.trim(), serial: data.serial.trim(),
-      status: data.status, boxes: rawBoxes === 1 && quantity > 0 ? 0 : rawBoxes, quantity,
-      priceBasis: STOCK_PRICE_BASES.includes(data.priceBasis) ? data.priceBasis : "Unidad", listPriceUsd: Math.max(0, Number(data.listPriceUsd) || 0),
+      status: data.status, boxes: 0, quantity,
+      priceBasis: "Unidad", listPriceUsd: Math.max(0, Number(data.listPriceUsd) || 0),
       vatRate: [0, 5, 10].includes(Number(data.vatRate)) ? Number(data.vatRate) : 10, marginPercent: Math.min(300, Math.max(0, Number(data.marginPercent) || 0)), valuationCriterion: STOCK_VALUATION_CRITERION,
       priceSource: priceWasChanged ? "Precio editado manualmente" : (existing?.priceSource || (Number(data.listPriceUsd) ? "Carga manual" : "")), priceSourceRow: priceWasChanged ? null : (existing?.priceSourceRow || null),
       notes: data.notes.trim(), source: existing?.source || "Registro manual", updatedAt: new Date().toISOString()
@@ -1428,7 +1418,7 @@
   $("#installed-search-input").addEventListener("input", renderInstalled);
   $("#installed-manufacturer-filter").addEventListener("change", renderInstalled);
   $("#installed-completeness-filter").addEventListener("change", renderInstalled);
-  ["boxes", "quantity", "priceBasis", "listPriceUsd", "vatRate", "marginPercent"].forEach((name) => stockForm.elements[name].addEventListener("input", updateStockFormTotal));
+  ["quantity", "listPriceUsd", "vatRate", "marginPercent"].forEach((name) => stockForm.elements[name].addEventListener("input", updateStockFormTotal));
   ["quantity", "listPriceUsd", "vatRate", "marginPercent"].forEach((name) => consolidatedStockForm.elements[name].addEventListener("input", updateConsolidatedFormTotal));
   $("#stock-default-margin").addEventListener("change", (event) => {
     const value = Number(event.target.value);
@@ -1665,12 +1655,12 @@
       {
         name: "list_office_stock", title: "Consultar stock general", description: "Devuelve los equipos y productos del stock general de ARES, agrupados por rubro y estado.",
         inputSchema: { type: "object", properties: {}, additionalProperties: false }, annotations: { readOnlyHint: true, untrustedContentHint: true },
-        execute: () => ({ records: stockItems.length, totalUnits: stockItems.reduce((sum, item) => sum + item.quantity, 0), totalBoxes: stockItems.reduce((sum, item) => sum + item.boxes, 0), totalEstimatedCostUSD: stockItems.reduce((sum, item) => sum + stockEstimatedTotalCost(item), 0), availableRecords: stockItems.filter((item) => stockStatus(item) === "Disponible").length, items: stockItems.map((item) => ({ ...item, status: stockStatus(item), netPriceUSD: stockNetPrice(item), estimatedUnitCostUSD: stockEstimatedUnitCost(item), estimatedTotalCostUSD: stockEstimatedTotalCost(item) })) })
+        execute: () => ({ records: stockItems.length, totalUnits: stockItems.reduce((sum, item) => sum + item.quantity, 0), totalEstimatedCostUSD: stockItems.reduce((sum, item) => sum + stockEstimatedTotalCost(item), 0), availableRecords: stockItems.filter((item) => stockStatus(item) === "Disponible").length, items: stockItems.map((item) => ({ ...item, status: stockStatus(item), netPriceUSD: stockNetPrice(item), estimatedUnitCostUSD: stockEstimatedUnitCost(item), estimatedTotalCostUSD: stockEstimatedTotalCost(item) })) })
       },
       {
         name: "add_office_stock_item", title: "Añadir registro al stock general", description: "Añade un equipo o producto al stock general de ARES.",
-        inputSchema: { type: "object", properties: { name: { type: "string" }, category: { type: "string", enum: STOCK_RUBRICS }, brand: { type: "string" }, model: { type: "string" }, serial: { type: "string" }, status: { type: "string", enum: STOCK_STATUSES }, boxes: { type: "integer", minimum: 0 }, quantity: { type: "integer", minimum: 0 }, priceBasis: { type: "string", enum: STOCK_PRICE_BASES }, listPriceUsd: { type: "number", minimum: 0 }, vatRate: { type: "number", enum: [0, 5, 10] }, marginPercent: { type: "number", minimum: 0 }, notes: { type: "string" } }, required: ["name", "category", "status", "boxes", "quantity"], additionalProperties: false }, annotations: { readOnlyHint: false, untrustedContentHint: false },
-        execute: (input) => { if (!input?.name || !STOCK_RUBRICS.includes(input?.category) || !STOCK_STATUSES.includes(input.status) || !Number.isInteger(input.boxes) || input.boxes < 0 || !Number.isInteger(input.quantity) || input.quantity < 0) throw new Error("Datos inválidos"); const item = normalizeStockItem({ marginPercent: stockMeta.defaultMarginPercent, ...input, id: uid(), updatedAt: new Date().toISOString() }); stockItems.unshift(item); saveStock(); return { id: item.id, name: item.name, status: stockStatus(item) }; }
+        inputSchema: { type: "object", properties: { name: { type: "string" }, category: { type: "string", enum: STOCK_RUBRICS }, brand: { type: "string" }, model: { type: "string" }, serial: { type: "string" }, status: { type: "string", enum: STOCK_STATUSES }, quantity: { type: "integer", minimum: 0 }, listPriceUsd: { type: "number", minimum: 0 }, vatRate: { type: "number", enum: [0, 5, 10] }, marginPercent: { type: "number", minimum: 0 }, notes: { type: "string" } }, required: ["name", "category", "status", "quantity"], additionalProperties: false }, annotations: { readOnlyHint: false, untrustedContentHint: false },
+        execute: (input) => { if (!input?.name || !STOCK_RUBRICS.includes(input?.category) || !STOCK_STATUSES.includes(input.status) || !Number.isInteger(input.quantity) || input.quantity < 0) throw new Error("Datos inválidos"); const item = normalizeStockItem({ marginPercent: stockMeta.defaultMarginPercent, ...input, id: uid(), updatedAt: new Date().toISOString() }); stockItems.unshift(item); saveStock(); return { id: item.id, name: item.name, status: stockStatus(item) }; }
       },
       {
         name: "list_installed_base", title: "Consultar base instalada", description: "Devuelve las unidades centrales entregadas por ARES con cliente, equipo, fecha de instalación y número de serie.",
