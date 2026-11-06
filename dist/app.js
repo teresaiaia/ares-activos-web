@@ -163,12 +163,27 @@
     };
   }
 
+  function canonicalizeAquapure(value) {
+    return String(value || "").replace(/aquapure/gi, "AQUAPURE");
+  }
+
+  function canonicalizeStockModel(value, category, name) {
+    const model = canonicalizeAquapure(value);
+    if (category !== "Cartuchos") return model;
+    const product = `${name || ""} ${model}`;
+    if (/\bMPT\b/i.test(product)) return "MPT";
+    if (/\bUFIII\b/i.test(product)) return "UFIII";
+    return model;
+  }
+
   function normalizeStockItem(item) {
     const legacyNotes = [item.notes, item.location && `Ubicación anterior: ${item.location}`, item.unit && `Unidad anterior: ${item.unit}`].filter(Boolean).join(" · ");
     const quantity = Math.max(0, Math.round(Number(item.quantity) || 0));
+    const name = canonicalizeAquapure(item.name || "Producto sin nombre");
+    const category = item.category || "Insumos";
     return {
-      id: item.id || uid(), name: item.name || "Producto sin nombre", category: item.category || "Insumos",
-      brand: String(item.brand || "").trim().toLocaleUpperCase("es"), model: item.model || "", serial: item.serial || "",
+      id: item.id || uid(), name, category,
+      brand: String(item.brand || "").trim().toLocaleUpperCase("es"), model: canonicalizeStockModel(item.model, category, name), serial: item.serial || "",
       status: STOCK_STATUSES.includes(item.status) ? item.status : (Number(item.quantity) > 0 ? "Disponible" : "No disponible"),
       boxes: 0, quantity,
       priceBasis: "Unidad",
@@ -1295,8 +1310,10 @@
     const existing = stockItems.find((entry) => entry.id === data.id);
     const priceWasChanged = existing && Number(existing.listPriceUsd || 0) !== Number(data.listPriceUsd || 0);
     const quantity = Math.max(0, Math.round(Number(data.quantity) || 0));
+    const name = canonicalizeAquapure(data.name.trim());
+    const category = data.category;
     const item = {
-      id: data.id || uid(), name: data.name.trim(), category: data.category, brand: data.brand.trim().toLocaleUpperCase("es"), model: data.model.trim(), serial: data.serial.trim(),
+      id: data.id || uid(), name, category, brand: data.brand.trim().toLocaleUpperCase("es"), model: canonicalizeStockModel(data.model.trim(), category, name), serial: data.serial.trim(),
       status: data.status, boxes: 0, quantity,
       priceBasis: "Unidad", listPriceUsd: Math.max(0, Number(data.listPriceUsd) || 0),
       vatRate: [0, 5, 10].includes(Number(data.vatRate)) ? Number(data.vatRate) : 10, marginPercent: Math.min(300, Math.max(0, Number(data.marginPercent) || 0)), valuationCriterion: STOCK_VALUATION_CRITERION,
