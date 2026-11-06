@@ -654,10 +654,14 @@
   function filteredStockItems() {
     const query = $("#stock-search-input").value.trim().toLocaleLowerCase("es");
     const category = $("#stock-category-filter").value;
+    const brandKey = $("#stock-brand-filter").value;
     const status = $("#stock-status-filter").value;
     return sortStockItems(stockItems.filter((item) => {
       const haystack = [item.name, item.category, item.brand, item.model, item.serial, item.valuationCriterion, item.priceSource, item.notes, item.source].join(" ").toLocaleLowerCase("es");
-      return (!query || haystack.includes(query)) && (!category || item.category === category) && (!status || stockStatus(item) === status);
+      return (!query || haystack.includes(query))
+        && (!category || item.category === category)
+        && (!brandKey || normalizedStockProductKey(item.brand) === brandKey)
+        && (!status || stockStatus(item) === status);
     }));
   }
 
@@ -685,6 +689,16 @@
     const selectedCategory = $("#stock-category-filter").value;
     const usedCategories = STOCK_RUBRICS.filter((category) => stockItems.some((item) => item.category === category));
     $("#stock-category-filter").innerHTML = `<option value="">Todos los rubros</option>${usedCategories.map((category) => `<option ${category === selectedCategory ? "selected" : ""}>${escapeHTML(category)}</option>`).join("")}`;
+
+    const selectedBrandKey = $("#stock-brand-filter").value;
+    const usedBrands = new Map();
+    stockItems.forEach((item) => {
+      const label = item.brand.trim();
+      const key = normalizedStockProductKey(label);
+      if (key && !usedBrands.has(key)) usedBrands.set(key, label);
+    });
+    const sortedBrands = [...usedBrands.entries()].sort((left, right) => left[1].localeCompare(right[1], "es", { sensitivity: "base" }));
+    $("#stock-brand-filter").innerHTML = `<option value="">Todas las marcas</option>${sortedBrands.map(([key, label]) => `<option value="${escapeHTML(key)}" ${key === selectedBrandKey ? "selected" : ""}>${escapeHTML(label)}</option>`).join("")}`;
 
     const visible = filteredStockItems();
     renderStockSortControls();
@@ -1131,10 +1145,16 @@
   }
 
   function exportStockCSV() {
+    const visible = filteredStockItems();
+    if (!visible.length) {
+      showToast("No hay resultados para exportar");
+      return;
+    }
     const headers = ["Producto o equipo", "Rubro", "Marca", "Modelo", "Número de serie", "Estado", "Cajas", "Unidades", "Precio aplicado por", "Precio de lista USD (IVA incluido)", "IVA %", "Precio neto USD", "Ganancia %", "Costo unitario estimado USD", "Costo total estimado USD", "Fuente del precio", "Criterio de valorización", "Notas", "Fuente del inventario"];
-    const rows = stockItems.map((item) => [item.name, item.category, item.brand, item.model, item.serial, stockStatus(item), item.boxes, item.quantity, item.priceBasis, item.listPriceUsd, item.vatRate, stockNetPrice(item), item.marginPercent, stockEstimatedUnitCost(item), stockEstimatedTotalCost(item), item.priceSource, STOCK_VALUATION_CRITERION, item.notes, item.source]);
-    download(`stock-general-ares-${new Date().toISOString().slice(0, 10)}.csv`, `\ufeff${[headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n")}`, "text/csv;charset=utf-8");
-    showToast("Stock exportado en CSV");
+    const rows = visible.map((item) => [item.name, item.category, item.brand, item.model, item.serial, stockStatus(item), item.boxes, item.quantity, item.priceBasis, item.listPriceUsd, item.vatRate, stockNetPrice(item), item.marginPercent, stockEstimatedUnitCost(item), stockEstimatedTotalCost(item), item.priceSource, STOCK_VALUATION_CRITERION, item.notes, item.source]);
+    const filterPart = filenamePart($("#stock-brand-filter").value || $("#stock-category-filter").value || $("#stock-status-filter").value || $("#stock-search-input").value.trim());
+    download(`stock-general-ares${filterPart ? `-${filterPart}` : ""}-${localDateStamp()}.csv`, `\ufeff${[headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n")}`, "text/csv;charset=utf-8");
+    showToast(`Stock exportado: ${visible.length} ${visible.length === 1 ? "resultado" : "resultados"}`);
   }
 
   function localDateStamp(date = new Date()) {
@@ -1396,6 +1416,7 @@
   $("#decision-filter").addEventListener("change", render);
   $("#stock-search-input").addEventListener("input", renderStock);
   $("#stock-category-filter").addEventListener("change", renderStock);
+  $("#stock-brand-filter").addEventListener("change", renderStock);
   $("#stock-status-filter").addEventListener("change", renderStock);
   $("#grouped-stock-search-input").addEventListener("input", renderGroupedStock);
   $("#grouped-stock-category-filter").addEventListener("change", renderGroupedStock);
