@@ -199,7 +199,7 @@ tbody tr:hover { background: #fafbfe; }
 .stock-status.no-disponible { background: #3a3d42; border-color: #3a3d42; color: #fff; }
 .stock-row.a-prestamo td, .stock-row.no-disponible td { background: #fafafa; }
 .stock-row.no-disponible td { color: #777b80; }
-.stock-table-wrap table { min-width: 1800px; }
+.stock-table-wrap table { min-width: 1580px; }
 .grouped-stock-table-wrap table { min-width: 1430px; }
 .grouped-stock-note { padding-left: 22px; border-left: 1px solid #d8dbde; }
 .grouped-stock-note strong, .grouped-stock-note small, .grouped-model { display: block; }

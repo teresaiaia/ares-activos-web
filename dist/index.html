@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#12213f" />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%2312213f'/%3E%3Cpath d='M17 46 29 17h7l12 29h-8l-2-6H26l-2 6Zm12-13h6l-3-9Z' fill='%236fe0c1'/%3E%3C/svg%3E" />
     <title>Gestión de activos · ARES Activos</title>
-    <link rel="stylesheet" href="styles.css?v=18" />
+    <link rel="stylesheet" href="styles.css?v=19" />
   </head>
   <body class="cloud-loading">
     <section id="auth-screen" class="auth-screen" aria-labelledby="auth-title">
@@ -229,8 +229,6 @@
                     <th class="sortable-th"><button class="sort-button" type="button" data-stock-sort-key="serial" data-sort-label="número de serie">Serie <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
                     <th class="numeric sortable-th"><button class="sort-button" type="button" data-stock-sort-key="quantity" data-sort-label="unidades">Unidades <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
                     <th class="numeric sortable-th"><button class="sort-button" type="button" data-stock-sort-key="listPriceUsd" data-sort-label="precio de lista">Precio lista US$<small>IVA incluido</small> <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
-                    <th class="numeric sortable-th"><button class="sort-button" type="button" data-stock-sort-key="netPriceUsd" data-sort-label="precio neto">Precio neto US$ <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
-                    <th class="numeric sortable-th"><button class="sort-button" type="button" data-stock-sort-key="marginPercent" data-sort-label="ganancia">Ganancia % <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
                     <th class="numeric sortable-th"><button class="sort-button" type="button" data-stock-sort-key="estimatedUnitCostUsd" data-sort-label="costo unitario estimado">Costo unit. US$ <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
                     <th class="numeric sortable-th"><button class="sort-button" type="button" data-stock-sort-key="estimatedTotalCostUsd" data-sort-label="costo total estimado">Costo total US$ <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
                     <th class="sortable-th"><button class="sort-button" type="button" data-stock-sort-key="status" data-sort-label="estado">Estado <span class="sort-indicator" aria-hidden="true">↕</span></button></th>
@@ -699,6 +697,6 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.102.0/dist/umd/supabase.min.js"></script>
     <script src="vendor/xlsx.full.min.js?v=0.20.3"></script>
     <script src="cloud-config.js?v=1"></script>
-    <script src="app.js?v=23"></script>
+    <script src="app.js?v=24"></script>
   </body>
 </html>

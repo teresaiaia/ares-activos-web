@@ -710,8 +710,6 @@
         <td>${escapeHTML(item.category)}</td><td>${escapeHTML(item.brand || "—")}</td><td>${escapeHTML(item.model || "—")}</td><td>${escapeHTML(item.serial || "—")}</td>
         <td class="numeric"><strong>${Number(item.quantity).toLocaleString("es-PY")}</strong></td>
         <td class="numeric">${Number(item.listPriceUsd) ? `${formatStockMoney(item.listPriceUsd)}<small class="price-basis">por ${item.priceBasis.toLocaleLowerCase("es")} · IVA ${item.vatRate}%</small>` : "—"}</td>
-        <td class="numeric">${Number(item.listPriceUsd) ? formatStockMoney(stockNetPrice(item)) : "—"}</td>
-        <td class="numeric"><span class="margin-badge">${Number(item.marginPercent).toLocaleString("es-PY", { maximumFractionDigits: 2 })}%</span></td>
         <td class="numeric">${Number(item.listPriceUsd) ? `<strong>${formatStockMoney(stockEstimatedUnitCost(item))}</strong><small class="price-basis">por ${item.priceBasis.toLocaleLowerCase("es")}</small>` : "—"}</td>
         <td class="numeric"><strong>${Number(item.listPriceUsd) ? formatStockMoney(stockEstimatedTotalCost(item)) : "—"}</strong></td>
         <td><span class="stock-status ${stockStatusClass(item)}">${status}</span></td>
